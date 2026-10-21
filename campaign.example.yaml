@@ -1,0 +1,57 @@
+# Copy to campaign.yaml and fill in your provider hosts + postal address.
+# The password is NOT stored here — it lives in the OS keyring (Settings → Sending account).
+campaign:
+  name: "October promo"
+  sheet_path: "./sample_leads.xlsx"
+  sheet_tab: "Leads"
+  date_order: "DMY"
+  quota: 200
+  frequency_days: 30
+  shuffle_order: true
+  send_window:
+    enabled: true
+    start: "09:00"
+    end: "18:00"
+    days: [Mon, Tue, Wed, Thu, Fri]
+    timezone: "Europe/London"
+
+throttle:
+  mode: "random"
+  fixed_seconds: 120
+  random_seconds: [60, 260]
+  backoff_seconds: [300, 900, 1800, 3600]
+
+limits:
+  daily_cap: 200
+  hourly_cap: 30
+
+safety:
+  dry_run: true
+  require_typed_confirmation_over: 50
+  stop_on_failure_rate: 0.10
+
+warmup:
+  enabled: true
+  ramp: [30, 60, 100, 150, 200]
+  first_send_date: null
+
+sender:
+  id: "sam"
+  from_name: "Sam at Samlax"
+  from_email: "sam@samlax.net"
+  reply_to: "sam@samlax.net"
+  smtp: { host: "smtp.PROVIDER", port: 587, starttls: true, timeout: 30 }
+  imap: { host: "imap.PROVIDER", port: 993, ssl: true, mailbox: "INBOX" }
+  secret_ref: "keyring:dispatch/sam"
+
+template:
+  kind: "blocks"
+  subject: "Quick question, {FirstName|default:\"there\"}"
+  html_path: "./templates/promo.html"
+  text_path: "./templates/promo.txt"
+  blocks_path: "./templates/promo.json"
+  image_url: "https://samlax.net/img/hero.jpg"
+  footer:
+    postal_address: "Samlax, 1 Example Street, London, E1 6AN"
+    unsubscribe_url: "https://samlax.net/u/{token}"
+    unsubscribe_mailto: "unsubscribe@samlax.net"

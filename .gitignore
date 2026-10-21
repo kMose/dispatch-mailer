@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+# live campaign config (machine-specific paths, provider hosts)
+campaign.yaml
+outbox/
+dispatch.sqlite3
+dispatch.sqlite3-wal
+dispatch.sqlite3-shm
+*.dispatch-backup.xlsx
+~$*.xlsx
+.pytest_cache/
+.coverage
+htmlcov/

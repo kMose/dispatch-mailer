@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "Personal note",
+  "subject": "Quick question, {FirstName|default:\"there\"}",
+  "preheader": "One short question — no pitch deck attached.",
+  "max_width_px": 600,
+  "blocks": [
+    {"type": "paragraph", "text": "Hi {FirstName|default:\"there\"},"},
+    {"type": "paragraph", "text": "I had a look at what {Company|default:\"your team\"} is doing and had one small idea that might be useful."},
+    {"type": "paragraph", "text": "Would it be worth a ten-minute call next week? If not, just reply \"no\" and I will leave you alone."},
+    {"type": "paragraph", "text": "— Sam"},
+    {"type": "paragraph", "text": "Samlax"}
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "Promo card",
+  "subject": "A quick idea for {Company|default:\"your team\"}",
+  "preheader": "Short, specific, and easy to say no to.",
+  "max_width_px": 600,
+  "blocks": [
+    {"type": "heading", "text": "A quick idea for {Company|default:\"your team\"}", "level": 2},
+    {"type": "image", "url": "https://samlax.net/img/hero.jpg", "alt": "Our October range", "width": 600, "link": null, "align": "center"},
+    {"type": "paragraph", "text": "Hi {FirstName|default:\"there\"}, we put together a short October range for teams like {Company|default:\"yours\"}."},
+    {"type": "paragraph", "text": "It is small, priced simply, and ships in two days. No subscription, no minimum term."},
+    {"type": "paragraph", "text": "If it is not relevant, reply \"no\" and I will not follow up."},
+    {"type": "button", "text": "See the range", "url": "https://samlax.net/october"},
+    {"type": "paragraph", "text": "— Sam, Samlax"}
+  ]
+}
