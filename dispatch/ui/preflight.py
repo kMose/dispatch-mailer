@@ -40,8 +40,11 @@ class PreflightDialog(QDialog):
         quota_row = QHBoxLayout()
         quota_row.addWidget(QLabel("Sends this run"))
         self.quota_spin = QSpinBox()
-        self.quota_spin.setRange(0, max(1, report.eligible))
-        self.quota_spin.setValue(max(0, min(report.planned, report.eligible)))
+        # Never offer more than the daily/warm-up allowance that is actually left, so a
+        # run cannot be started that would stop halfway at the cap.
+        limit = max(0, min(report.eligible, report.daily_remaining))
+        self.quota_spin.setRange(0, limit)
+        self.quota_spin.setValue(max(0, min(report.planned, limit)))
         self.quota_spin.valueChanged.connect(self._quota_changed)
         quota_row.addWidget(self.quota_spin)
         self.quota_note = QLabel("")
@@ -135,7 +138,9 @@ class PreflightDialog(QDialog):
                                                       quota=self.quota_spin.value())
         finally:
             conn.close()
-        self.quota_spin.setMaximum(max(1, self.report.eligible))
+        self.quota_spin.setMaximum(
+            max(0, min(self.report.eligible, self.report.daily_remaining))
+        )
         self._render()
 
     def _start(self) -> None:

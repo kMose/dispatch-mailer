@@ -180,9 +180,16 @@ class SettingsDialog(QDialog):
         layout.addStretch(1)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        suppression_btn = buttons.addButton("Suppression & review…",
+                                            QDialogButtonBox.ActionRole)
+        suppression_btn.clicked.connect(self._open_suppression)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)
+
+    def _open_suppression(self) -> None:
+        from .suppression import SuppressionDialog
+        SuppressionDialog(self.cfg, self).exec()
 
     # ------------------------------------------------------------------
     def _password_state(self) -> str:

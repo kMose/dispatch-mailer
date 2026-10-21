@@ -303,6 +303,7 @@ class MainWindow(QMainWindow):
 
         tools = menu.addMenu("&Tools")
         self._action(tools, "Template builder…", self.open_template_builder, "Ctrl+T")
+        self._action(tools, "Suppression & review…", self.open_suppression)
         self._action(tools, "Settings…", self.open_settings, "Ctrl+,")
         self._action(tools, "Check inbox now", self.check_inbox)
 
@@ -668,6 +669,12 @@ class MainWindow(QMainWindow):
         dlg = TemplateBuilderDialog(self.cfg, self.cfg_path, self)
         dlg.saved.connect(self._reload_config)
         dlg.exec()
+
+    def open_suppression(self) -> None:
+        from .suppression import SuppressionDialog
+        SuppressionDialog(self.cfg, self).exec()
+        self.reload_contacts()
+        self._refresh_stats()
 
     def open_settings(self) -> None:
         dlg = SettingsDialog(self.cfg, self.cfg_path, self)

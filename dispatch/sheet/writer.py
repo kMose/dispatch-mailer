@@ -84,7 +84,8 @@ def _header_map(ws) -> tuple[int, dict[str, int], list[str]]:
 
 
 def collect_updates(conn: sqlite3.Connection, run_id: int | None = None,
-                    only_real_sends: bool = True) -> list[Update]:
+                    only_real_sends: bool = True,
+                    include_replies: bool = True) -> list[Update]:
     """Build write-back rows from SQLite (never from a live sheet read)."""
     where = ["1=1"]
     params: list[Any] = []
@@ -119,6 +120,20 @@ def collect_updates(conn: sqlite3.Connection, run_id: int | None = None,
             last_error=r["last_error"],
             attempts=r["attempts"],
         ))
+    if include_replies:
+        # Replied is a one-way flag: it can be set TRUE, never cleared. Replies are
+        # independent of a run, so they are merged in even when this contact was not
+        # part of the run being flushed.
+        by_row = {u.sheet_row: u for u in out}
+        for r in conn.execute(
+            "SELECT sheet_row FROM contacts WHERE replied=1 AND in_sheet=1"
+            " AND sheet_row IS NOT NULL"
+        ):
+            row = int(r["sheet_row"])
+            if row in by_row:
+                by_row[row].replied = True
+            else:
+                out.append(Update(sheet_row=row, replied=True))
     return out
 
 

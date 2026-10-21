@@ -57,6 +57,30 @@ def test_flush_updates_only_sent_rows_and_preserves_everything_else(campaign):
     wb.close()
 
 
+def test_replied_is_written_back_even_without_a_send_in_this_run(campaign):
+    # The sheet says nothing; the reply arrived via IMAP and lives in SQLite.
+    contacts = [{"email": "replied@example.com"},
+                {"email": "quiet@example.com"}]
+    cfg = campaign(contacts)
+    conn = db.connect(cfg.db_path)
+    db.init_db(conn)
+    preflight.import_sheet(cfg, conn)
+    replied_id = db.contact_by_email(conn, "replied@example.com")["id"]
+    conn.execute("UPDATE contacts SET replied=1 WHERE id=?", (replied_id,))
+
+    run_id = db.create_run(conn, 0, False)  # a run with no sends at all
+    result = sheet_writer.flush_run(conn, cfg, run_id)
+    conn.close()
+
+    assert result.changes
+    wb = load_workbook(cfg.sheet_file)
+    ws = wb["Leads"]
+    cols = {ws.cell(row=1, column=i).value: i for i in range(1, ws.max_column + 1)}
+    assert ws.cell(row=2, column=cols["Replied"]).value is True
+    assert ws.cell(row=3, column=cols["Replied"]).value is None
+    wb.close()
+
+
 def test_last_advertised_never_moves_backwards(campaign):
     future = date.today() + timedelta(days=60)
     contacts = [{"email": "future@example.com", "last_advertised": future}]

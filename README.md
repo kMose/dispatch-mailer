@@ -89,7 +89,9 @@ ls demo/outbox        # .eml files, nothing sent
 8. **Go live** — set `safety.dry_run: false` (or untick dry run in Settings), review the
    pre-flight arithmetic, then start. Over 50 sends you must type `SEND <n>`.
 9. **After the run** — the post-run report shows totals and a per-hour breakdown. Use
-   *Write results to sheet* to preview the diff and then write it.
+   *Write results to sheet* to preview the diff and then write it. `LastAdvertised`,
+   `Replied`, `Status`, `LastError` and `Attempts` are updated; replies detected by IMAP
+   are written to the `Replied` column on the same flush.
 
 ---
 
@@ -166,7 +168,7 @@ order does not matter. Every unlisted column is preserved verbatim, and so is fo
 | `FirstName`, `LastName`, `Company` | Optional, used by placeholders |
 | `Email` | **Required** |
 | `LastAdvertised` | Program writes ISO date; never moves backwards |
-| `Replied` | Program may set TRUE only (one-way) |
+| `Replied` | Program may set TRUE only (one-way); written on every real flush |
 | `Ignore` | Read-only; truthy (`y/yes/true/1/x`) means skip |
 | `LastContacted` | Read-only |
 | `Status`, `LastError`, `Attempts` | Written only if the columns exist |
@@ -183,7 +185,7 @@ Evaluated in order, first match wins:
 
 1. `Ignore` truthy → `skipped:ignored`
 2. on the suppression list → `skipped:suppressed`
-3. `Replied` truthy → `skipped:replied`
+3. `Replied` truthy (in the sheet or set by an IMAP-detected reply) → `skipped:replied`
 4. invalid email / duplicate of an earlier row → `skipped:invalid` / `skipped:duplicate`
 5. no `LastAdvertised` → **eligible**
 6. `last_advertised + frequency_days <= today` → **eligible**
@@ -231,8 +233,9 @@ appear only in the table and in explicit CSV exports.
 The address does not exist or refuses mail. Dispatch marks the row `failed_hard`, adds the
 address to `suppression` as `hard_bounce`, and never tries it again. Fix the address in
 the sheet and remove it from the suppression list if it was a mistake
-(Settings has no suppression editor yet; use `sqlite3 dispatch.sqlite3 "DELETE FROM
-suppression WHERE email_norm='...'"`).
+Open **Tools → Suppression & review…** (also in Settings), select the address and choose
+*Remove selected*. The same screen lets you add an address manually, export the list, and
+approve opt-out replies.
 
 **`421 4.7.28` / “quota exceeded” / “rate limit”**
 The account is sending too fast or too much. Dispatch suspends the account for **10
@@ -281,13 +284,17 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 124 tests, no network
+pytest                                   # 127 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
 The suite uses `aiosmtpd` on localhost for SMTP (including a 421 rate-limit case) and
 saved `.eml` fixtures for IMAP parsing, plus offscreen Qt smoke tests for the main
-window and template builder. Coverage of `engine/` + `sheet/` is **89%**.
+window, template builder, suppression screen and pre-flight quota. Coverage of
+`engine/` + `sheet/` is **89%**.
+
+GitHub Actions (`.github/workflows/tests.yml`) runs the whole suite on Windows for every
+push to `main` and every pull request.
 
 Test map:
 
@@ -333,7 +340,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             124 tests, .eml fixtures, offscreen UI smoke tests
+tests/             127 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 
@@ -383,8 +390,9 @@ a literal reading, the reason.
     (in dry run) immediately after init.
 15. **Timezone handling** uses `zoneinfo` + `tzdata`; send timestamps are stored with the
     local UTC offset, so hourly caps and the window are computed in local time.
-16. **No suppression editor in the GUI.** Suppression is automatic (hard bounces) and is
-    editable in SQLite; a dedicated editor was out of scope for v1.
+16. **Suppression has a dedicated screen** (Tools → Suppression & review…), with the
+    review queue next to it: remove a mistaken hard bounce, add an address manually,
+    approve an opt-out, export the list. Hard bounces are still added automatically.
 17. **Pause during a window wait** is honoured at the next loop iteration; pause does not
     freeze the wall clock.
 18. **The frozen app is onedir** (faster start, easier to inspect) rather than onefile.
@@ -397,7 +405,11 @@ a literal reading, the reason.
     headers) painted near-black behind dark labels, which made the template builder's
     block fields unreadable. Scroll areas, viewports and wizard pages are also given an
     explicit light background.
-21. **Reliability fixes from the audit** (each has a regression test):
+21. **`Replied` is written back on every real flush**, including for contacts that did
+    not send in that run (a reply can arrive at any time). Only TRUE is ever written.
+22. **The pre-flight quota spinner is capped** at `min(eligible, remaining daily/warm-up
+    allowance)`, so a run cannot be started that would stop halfway at the cap.
+23. **Reliability fixes from the audit** (each has a regression test):
     - Pause freezes *before* the next row is claimed — it no longer lets one extra
       message out while the countdown is running.
     - A window further than 24 h away (Friday evening → Monday) is waited for instead of

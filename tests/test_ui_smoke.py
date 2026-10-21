@@ -9,8 +9,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QMessageBox  # noqa: E402
 
+from dispatch import db  # noqa: E402
 from dispatch.config import load_config  # noqa: E402
+from dispatch.engine import preflight  # noqa: E402
 from dispatch.ui.main_window import MainWindow  # noqa: E402
+from dispatch.ui.preflight import PreflightDialog  # noqa: E402
+from dispatch.ui.suppression import SuppressionDialog  # noqa: E402
 from dispatch.ui.template_builder import TemplateBuilderDialog  # noqa: E402
 
 
@@ -75,6 +79,52 @@ def test_template_builder_saves_artifacts(qtbot, campaign, quiet_boxes):
     assert "Hello" in html or "{" in html
     saved = load_config(cfg.config_path) if cfg.config_path else cfg
     assert saved.template.subject == "Hello {FirstName|default:\"there\"}"
+
+
+def test_suppression_dialog_removes_and_approves(qtbot, campaign, quiet_boxes, monkeypatch):
+    cfg = campaign([{"email": "a@example.com"}])
+    conn = db.connect(cfg.db_path)
+    db.init_db(conn)
+    db.add_suppression(conn, "bad@example.com", "hard_bounce", "dsn")
+    db.add_needs_review(conn, None, "opt@example.com", "opt_out", "asked to be removed")
+    conn.close()
+
+    dialog = SuppressionDialog(cfg)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert dialog.sup_table.rowCount() == 1
+    assert dialog.review_table.rowCount() == 1
+
+    monkeypatch.setattr(QMessageBox, "question",
+                        staticmethod(lambda *a, **k: QMessageBox.Yes))
+    dialog.sup_table.selectRow(0)
+    dialog._remove_selected()
+    assert dialog.sup_table.rowCount() == 0
+
+    dialog.review_table.selectRow(0)
+    dialog._approve_opt_out()
+    assert dialog.review_table.rowCount() == 0
+
+    check = db.connect(cfg.db_path)
+    assert "opt@example.com" in db.suppression_set(check)
+    assert not db.review_items(check)
+    check.close()
+    dialog.close()
+
+
+def test_preflight_quota_is_clipped_to_daily_allowance(qtbot, campaign):
+    contacts = [{"email": f"q{i}@example.com"} for i in range(5)]
+    cfg = campaign(contacts, daily_cap=2, dry_run=True)
+    conn = db.connect(cfg.db_path)
+    db.init_db(conn)
+    report = preflight.run_preflight(cfg, conn)
+    dialog = PreflightDialog(report, cfg)
+    qtbot.addWidget(dialog)
+    assert report.eligible == 5
+    assert report.daily_remaining == 2
+    assert dialog.quota_spin.maximum() == 2
+    dialog.close()
+    conn.close()
 
 
 def test_template_builder_blocks_save_on_invalid_document(qtbot, campaign, quiet_boxes,
