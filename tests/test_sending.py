@@ -4,7 +4,6 @@ from __future__ import annotations
 import time
 from datetime import date
 
-import pytest
 
 from dispatch import db
 from dispatch.engine import preflight

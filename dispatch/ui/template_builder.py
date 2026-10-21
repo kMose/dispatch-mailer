@@ -13,13 +13,12 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QThread, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QApplication, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QMenu, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSpinBox,
     QSplitter, QTextBrowser, QToolButton, QVBoxLayout, QWidget,
 )
 
-from .. import db
 from ..config import FullConfig, write_config
 from ..mail import blocks, compose
 from ..mail.secrets import SecretNotFound, resolve_secret
@@ -98,17 +97,17 @@ class TemplateBuilderDialog(QDialog):
         self.banner.setObjectName("DryBanner")
         self.banner.setWordWrap(True)
         layout.addWidget(self.banner)
-        switch = QPushButton("Switch to Blocks…")
-        switch.clicked.connect(self._switch_to_blocks)
+        self.raw_switch = QPushButton("Switch to Blocks…")
+        self.raw_switch.clicked.connect(self._switch_to_blocks)
         if self.raw:
             row = QHBoxLayout()
             row.addWidget(self.banner, 1)
-            row.addWidget(switch)
+            row.addWidget(self.raw_switch)
             layout.removeWidget(self.banner)
             layout.addLayout(row)
         else:
             self.banner.hide()
-            switch.hide()
+            self.raw_switch.hide()
 
         top = QFrame()
         top.setObjectName("Card")
@@ -630,6 +629,8 @@ class TemplateBuilderDialog(QDialog):
             return
         self.raw = False
         self.current = 0
+        self.banner.hide()
+        self.raw_switch.hide()
         self.name_edit.setText(self.doc.get("name", "New template"))
         self.subject_edit.setText(self.doc.get("subject", ""))
         self.preheader_edit.setText(self.doc.get("preheader", ""))
@@ -650,6 +651,7 @@ class TemplateBuilderDialog(QDialog):
         self.doc = blocks.new_document(self.cfg.campaign.name)
         self.current = 0
         self.banner.hide()
+        self.raw_switch.hide()
         self.name_edit.setText(self.doc["name"])
         self.subject_edit.setText(self.cfg.template.subject)
         self._set_editing_enabled(True)

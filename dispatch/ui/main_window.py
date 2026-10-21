@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
+    QAbstractItemView, QButtonGroup, QDialog, QFileDialog, QFrame,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPlainTextEdit, QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget,
 )
@@ -21,8 +21,6 @@ from ..config import FullConfig, load_config
 from ..engine import eligibility
 from ..engine import preflight as preflight_mod
 from ..engine.worker import Worker, mask_email
-from ..sheet import writer as sheet_writer
-from ..sheet.reader import SheetError
 from .inbox import InboxCheckThread
 from .models import ContactFilterProxy, ContactTableModel
 from .preflight import PreflightDialog
@@ -518,6 +516,14 @@ class MainWindow(QMainWindow):
 
     # --------------------------------------------------------------- stats
     def _refresh_stats(self) -> None:
+        # The 400 ms tick can fire while the window is closing and the connection is
+        # already gone; never let that raise out of the Qt event loop.
+        try:
+            self._refresh_stats_inner()
+        except sqlite3.Error:
+            return
+
+    def _refresh_stats_inner(self) -> None:
         cfg = self.cfg
         account = cfg.sender.id
         try:
@@ -816,6 +822,8 @@ class MainWindow(QMainWindow):
             else:
                 event.ignore()
                 return
+        self.timer.stop()
+        self.imap_timer.stop()
         self._save_geometry()
         try:
             self.conn.close()

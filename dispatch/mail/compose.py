@@ -11,7 +11,6 @@ import hashlib
 import html as html_mod
 import json
 import re
-import uuid
 from datetime import date
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid

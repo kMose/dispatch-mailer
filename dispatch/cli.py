@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import shutil
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from . import __version__, db
@@ -21,7 +19,7 @@ from .config import ConfigError, FullConfig, load_config, write_config
 from .engine import preflight as preflight_mod
 from .engine.worker import Worker
 from .mail import blocks, compose
-from .mail.secrets import SecretNotFound, resolve_secret
+from .mail.secrets import SecretNotFound
 from .sheet import writer as sheet_writer
 
 STARTERS = Path(__file__).parent / "templates" / "starters"
@@ -95,7 +93,7 @@ def cmd_send(args) -> int:
     dry = True if args.dry_run else cfg.safety.dry_run
     conn = _conn(cfg)
     try:
-        report = preflight_mod.run_preflight(cfg, conn, quota=args.quota)
+        report = preflight_mod.run_preflight(cfg, conn, quota=args.quota, dry_run=dry)
         _print_report(report)
         if not report.ok:
             print("\nRun blocked. Fix the issues above (or --quota to reduce).", file=sys.stderr)
@@ -193,7 +191,8 @@ def cmd_flush(args) -> int:
     try:
         run_id = args.run_id or _latest_run_id(conn)
         updates = sheet_writer.collect_updates(conn, run_id)
-        changes = sheet_writer.plan(cfg.sheet_file, updates, cfg.campaign.sheet_tab)
+        changes = sheet_writer.plan(cfg.sheet_file, updates, cfg.campaign.sheet_tab,
+                                    date_order=cfg.campaign.date_order)
         for change in changes[:200]:
             print("  " + change.describe())
         if not changes:
@@ -202,7 +201,8 @@ def cmd_flush(args) -> int:
         if args.dry_run:
             print(f"{len(changes)} change(s) would be written (--dry-run)")
             return 0
-        result = sheet_writer.write_back(cfg.sheet_file, updates, cfg.campaign.sheet_tab)
+        result = sheet_writer.write_back(cfg.sheet_file, updates, cfg.campaign.sheet_tab,
+                                         date_order=cfg.campaign.date_order)
         print(result.summary + f" -> {result.path}")
         return 0
     except sheet_writer.SheetLockedError as exc:

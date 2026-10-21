@@ -4,7 +4,6 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any
 
 from .. import db
 from ..config import FullConfig
@@ -103,13 +102,31 @@ def import_sheet(cfg: FullConfig, conn: sqlite3.Connection) -> SheetData:
 def run_preflight(cfg: FullConfig, conn: sqlite3.Connection, *,
                   quota: int | None = None,
                   now: datetime | None = None,
-                  today: date | None = None) -> PreflightReport:
+                  today: date | None = None,
+                  dry_run: bool | None = None) -> PreflightReport:
     quota = int(quota or cfg.campaign.quota)
     today = today or date.today()
     window = cfg.campaign.send_window
     now_local = now.astimezone(window.tz) if now else datetime.now(window.tz)
 
     report = PreflightReport(cfg=cfg, quota=quota, mean_seconds=cfg.throttle.mean_seconds())
+    live = not (cfg.safety.dry_run if dry_run is None else dry_run)
+    if live:
+        host = cfg.sender.smtp.host.strip()
+        if not host or "PROVIDER" in host.upper():
+            report.error = ("sender.smtp.host is still a placeholder — set your provider's "
+                            "SMTP host (Settings → SMTP / IMAP) before a live run.")
+            return report
+        if not cfg.template.footer.postal_address.strip():
+            report.error = ("The compliance footer has no postal address — every marketing "
+                            "email needs a physical address (Settings → Compliance).")
+            return report
+        try:
+            from ..mail.secrets import resolve_secret
+            resolve_secret(cfg.sender.secret_ref)
+        except Exception as exc:
+            report.error = f"SMTP password unavailable: {exc}"
+            return report
     report.sheet_locked = lockfile_for(cfg.sheet_file).exists()
     try:
         data = import_sheet(cfg, conn)
@@ -177,17 +194,18 @@ def run_preflight(cfg: FullConfig, conn: sqlite3.Connection, *,
         )
     report.planned = planned
 
-    remaining = window.seconds_left(now_local)
-    is_open = window.is_open(now_local)
-    if not is_open and window.enabled:
-        nxt = window.next_open(now_local)
+    remaining = feasibility.available_seconds(now_local, window)
+    is_open = window.is_open(now_local) or not window.enabled
+    opens_at = None
+    if not is_open:
+        opens_at = window.next_open(now_local).strftime("%a %d %b %H:%M")
         report.warnings.append(
-            f"Outside the send window; it next opens {nxt.strftime('%a %d %b %H:%M')}."
+            f"Outside the send window; it next opens {opens_at} and the run will wait."
         )
     report.feasibility = feasibility.check(
         quota=planned, mean_seconds=report.mean_seconds,
         remaining_seconds=remaining, window_end_hhmm=window.end,
-        is_open_now=is_open or not window.enabled,
+        is_open_now=is_open, opens_at=opens_at,
     )
     return report
 

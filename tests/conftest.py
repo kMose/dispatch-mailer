@@ -7,8 +7,11 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
+
+# Qt must pick the offscreen platform before any PySide6 import (UI smoke tests).
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from aiosmtpd.controller import Controller

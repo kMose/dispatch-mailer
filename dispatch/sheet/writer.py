@@ -12,7 +12,6 @@ from typing import Any, Iterable
 
 from openpyxl import load_workbook
 
-from .. import db
 from .reader import KNOWN_HEADERS, norm_header, parse_date_cell
 
 
@@ -123,18 +122,19 @@ def collect_updates(conn: sqlite3.Connection, run_id: int | None = None,
     return out
 
 
-def _existing_date(cell) -> date | None:
+def _existing_date(cell, date_order: str = "DMY") -> date | None:
     value = cell.value
     if value is None:
         return None
-    parsed, _, _ = parse_date_cell(value)
+    parsed, _, _ = parse_date_cell(value, date_order)
     return parsed
 
 
-def plan(path: Path, updates: Iterable[Update], tab: str | None = None) -> list[Change]:
+def plan(path: Path, updates: Iterable[Update], tab: str | None = None,
+         date_order: str = "DMY") -> list[Change]:
     """Dry-run of the write: returns the exact cells that would change."""
     p = Path(path)
-    wb = load_workbook(p, data_only=False)
+    wb = load_workbook(p, data_only=False, keep_vba=p.suffix.lower() == ".xlsm")
     try:
         ws = wb[tab] if tab else wb.active
         _, cols, _ = _header_map(ws)
@@ -145,7 +145,7 @@ def plan(path: Path, updates: Iterable[Update], tab: str | None = None) -> list[
                 continue
             if "last_advertised" in cols and u.last_advertised:
                 cell = ws.cell(row=r, column=cols["last_advertised"])
-                old = _existing_date(cell)
+                old = _existing_date(cell, date_order)
                 if old is None or u.last_advertised > old:
                     changes.append(Change(r, "LastAdvertised",
                                           old.isoformat() if old else None,
@@ -173,7 +173,7 @@ def plan(path: Path, updates: Iterable[Update], tab: str | None = None) -> list[
 
 
 def write_back(path: str | Path, updates: Iterable[Update], tab: str | None = None,
-               backup: bool = True) -> WriteResult:
+               backup: bool = True, date_order: str = "DMY") -> WriteResult:
     """Write to a temp file in the same directory, then os.replace() over the original."""
     p = Path(path)
     updates = [u for u in updates if u.sheet_row]
@@ -182,7 +182,9 @@ def write_back(path: str | Path, updates: Iterable[Update], tab: str | None = No
             raise ValueError(f"refusing to write to row {u.sheet_row}")
     assert_not_locked(p)
 
-    wb = load_workbook(p, data_only=False)
+    # keep_vba keeps a macro-enabled workbook macro-enabled instead of silently
+    # stripping vbaProject.bin on save.
+    wb = load_workbook(p, data_only=False, keep_vba=p.suffix.lower() == ".xlsm")
     tmp_name = None
     try:
         ws = wb[tab] if tab else wb.active
@@ -196,7 +198,7 @@ def write_back(path: str | Path, updates: Iterable[Update], tab: str | None = No
                 continue
             if "last_advertised" in cols and u.last_advertised:
                 cell = ws.cell(row=r, column=cols["last_advertised"])
-                old = _existing_date(cell)
+                old = _existing_date(cell, date_order)
                 if old is None or u.last_advertised > old:
                     cell.value = u.last_advertised
                     cell.number_format = "yyyy-mm-dd"
@@ -256,4 +258,5 @@ def write_back(path: str | Path, updates: Iterable[Update], tab: str | None = No
 
 def flush_run(conn: sqlite3.Connection, cfg, run_id: int | None) -> WriteResult:
     updates = collect_updates(conn, run_id)
-    return write_back(cfg.sheet_file, updates, cfg.campaign.sheet_tab)
+    return write_back(cfg.sheet_file, updates, cfg.campaign.sheet_tab,
+                      date_order=cfg.campaign.date_order)

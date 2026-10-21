@@ -34,6 +34,7 @@ DEFAULT_DOC = {
 }
 
 _LINK_MD = re.compile(r"\[([^\]]+)\]\((https://[^\s)]+)\)")
+_ANY_LINK_MD = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
 _BOLD_MD = re.compile(r"\*\*([^*]+)\*\*")
 _ITALIC_MD = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 # Placeholders must survive HTML escaping so the engine can still parse `|default:"…"`.
@@ -323,7 +324,7 @@ def validate_document(doc: Mapping[str, Any], columns: list[str] | None = None) 
         if link and not str(link).startswith("https://"):
             errors.append(f"Block {i} image link must start with https://.")
         if btype == "paragraph":
-            for label, url in _LINK_MD.findall(str(block.get("text", ""))):
+            for label, url in _ANY_LINK_MD.findall(str(block.get("text", ""))):
                 if not url.startswith("https://"):
                     errors.append(f"Block {i}: link '{label}' must start with https://.")
             text = str(block.get("text", ""))

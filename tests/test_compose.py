@@ -74,15 +74,13 @@ def test_rendered_message_roundtrips(campaign):
 
 
 def test_filters(campaign):
-    cfg = campaign([{"email": "a@example.com"}])
     values = {"FirstName": "  sam  ", "Email": "a@example.com"}
     assert compose.render_string("{FirstName|trim|upper}", values) == "SAM"
     assert compose.render_string("{FirstName|default:\"x\"}", values) == "  sam  "
     assert compose.render_string("{Nope|default:\"fallback\"}", values) == "fallback"
 
 
-def test_blocks_validator_catches_problems(campaign):
-    cfg = campaign([{"email": "a@example.com"}])
+def test_blocks_validator_catches_problems():
     doc = {
         "subject": "", "preheader": "", "max_width_px": 600,
         "blocks": [

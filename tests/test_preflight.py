@@ -1,7 +1,7 @@
 """Pre-flight report: counts, caps, feasibility, blocking conditions."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from dispatch import db
@@ -131,6 +131,44 @@ def test_locked_sheet_blocks_the_run(campaign):
         assert "Excel" in report.headline()
     finally:
         lock.unlink()
+
+
+def test_live_run_blocks_on_placeholder_smtp_host(campaign):
+    cfg = campaign([{"email": "a@example.com"}])
+    cfg.sender.smtp.host = "smtp.PROVIDER"
+    conn = fresh(cfg)
+    live = preflight.run_preflight(cfg, conn, dry_run=False)
+    dry = preflight.run_preflight(cfg, conn, dry_run=True)
+    conn.close()
+    assert live.ok is False and "placeholder" in (live.error or "").lower()
+    assert dry.error is None
+
+
+def test_live_run_requires_a_postal_address(campaign):
+    cfg = campaign([{"email": "a@example.com"}])
+    cfg.template.footer.postal_address = "   "
+    conn = fresh(cfg)
+    report = preflight.run_preflight(cfg, conn, dry_run=False)
+    conn.close()
+    assert not report.ok
+    assert "postal address" in (report.error or "").lower()
+
+
+def test_formula_dates_are_flagged(campaign):
+    from openpyxl import Workbook
+    cfg = campaign([{"email": "a@example.com"}])
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Leads"
+    ws.append(["Email", "LastAdvertised"])
+    ws.append(["a@example.com", "=DATE(2026,1,1)"])
+    ws.append(["b@example.com", "2026-01-02"])
+    wb.save(cfg.sheet_file)
+    wb.close()
+
+    from dispatch.sheet.reader import read_sheet
+    data = read_sheet(cfg.sheet_file)
+    assert any("formulas in a date column" in w for w in data.warnings)
 
 
 def test_remaining_allowance(campaign):

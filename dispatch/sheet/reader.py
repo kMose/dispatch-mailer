@@ -335,11 +335,51 @@ def read_sheet(path: str | Path, tab: str | None = None,
             )
             contacts.append(contact)
 
+        # openpyxl with data_only=True returns None for a formula whose result has never
+        # been cached (a sheet edited outside Excel). That looks like "never advertised"
+        # and could cause a duplicate send, so check the raw cells too.
+        formula_rows = _formula_date_rows(p, tab_name, header_row,
+                                          [idx for idx, key in col_map.items()
+                                           if key in DATE_COLUMNS])
+        if formula_rows:
+            warnings.append(
+                f"{len(formula_rows)} row(s) have formulas in a date column "
+                f"(rows {', '.join(str(r) for r in formula_rows[:10])}"
+                f"{'…' if len(formula_rows) > 10 else ''}); open the workbook in Excel "
+                f"and save once so their values are cached, or replace them with dates."
+            )
+
         if empty_email_rows:
             warnings.append(f"{empty_email_rows} row(s) have no email address")
         if not contacts:
             warnings.append("no data rows found below the header")
         return SheetData(p, tab_name, headers, contacts, ambiguous, warnings)
+    finally:
+        wb.close()
+
+
+def _formula_date_rows(path: Path, tab: str, header_row: int,
+                       columns: list[int], max_rows: int = 20000) -> list[int]:
+    """Row numbers whose date cell holds a formula (second, cheap pass)."""
+    if not columns:
+        return []
+    try:
+        wb = load_workbook(path, data_only=False, read_only=False)
+    except Exception:
+        return []
+    try:
+        ws = wb[tab]
+        found: list[int] = []
+        last = min(ws.max_row, header_row + max_rows)
+        for row in range(header_row + 1, last + 1):
+            for col in columns:
+                value = ws.cell(row=row, column=col).value
+                if isinstance(value, str) and value.startswith("="):
+                    found.append(row)
+                    break
+        return found
+    except Exception:
+        return []
     finally:
         wb.close()
 

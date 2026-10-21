@@ -11,8 +11,7 @@ import re
 import sqlite3
 from dataclasses import dataclass, field
 from email import policy
-from email.utils import getaddresses, parseaddr
-from typing import Iterable
+from email.utils import parseaddr
 
 from .. import db
 
@@ -77,6 +76,17 @@ def _is_noreply(addr: str) -> bool:
     return local in NOREPLY_LOCAL or local.startswith("noreply") or local.startswith("no-reply")
 
 
+_QUOTE_START = re.compile(
+    r"(?im)^(?:>|On .{0,120}wrote:|-{2,}\s*Original Message\s*-{2,}|From:\s)"
+)
+
+
+def _strip_quoted(text: str) -> str:
+    """Drop the quoted original so our own unsubscribe footer cannot look like an opt-out."""
+    match = _QUOTE_START.search(text)
+    return text[:match.start()] if match else text
+
+
 def _body_snippet(msg, limit: int = 200) -> str:
     text = ""
     try:
@@ -94,6 +104,7 @@ def _body_snippet(msg, limit: int = 200) -> str:
             text = payload.decode(msg.get_content_charset() or "utf-8", "replace")
     except Exception:
         text = ""
+    text = _strip_quoted(text)
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit]
 
@@ -258,6 +269,17 @@ def apply_message(conn: sqlite3.Connection, ev: Inbound, account_id: str) -> str
     return "ignored"
 
 
+def uid_start(last_uid: int, stored_validity: str | None,
+              current_validity: str | None) -> int:
+    """A mailbox recreated with a new UIDVALIDITY restarts UIDs at 1.
+
+    Without this the watermark stays above the new UIDs and replies are missed forever.
+    """
+    if stored_validity and current_validity and stored_validity != current_validity:
+        return 0
+    return last_uid
+
+
 class IMAPMonitor:
     def __init__(self, cfg, password: str, *, max_fetch: int = 100):
         self.cfg = cfg
@@ -283,6 +305,23 @@ class IMAPMonitor:
         client = self._connect()
         try:
             client.select(self.cfg.sender.imap.mailbox or "INBOX", readonly=True)
+
+            # A recreated mailbox resets UIDs; without this check the watermark would
+            # sit above every new message and replies would never match again.
+            current_validity = None
+            try:
+                _, vdata = client.response("UIDVALIDITY")
+                if vdata and vdata[0]:
+                    raw_validity = vdata[0]
+                    current_validity = (raw_validity.decode() if isinstance(raw_validity, bytes)
+                                        else str(raw_validity))
+            except Exception:
+                current_validity = None
+            stored_validity = db.get_meta(conn, f"imap_uidvalidity:{account}")
+            last_uid = uid_start(last_uid, stored_validity, current_validity)
+            if current_validity:
+                db.set_meta(conn, f"imap_uidvalidity:{account}", current_validity)
+
             criterion = f"UID {last_uid + 1}:*" if last_uid else "ALL"
             typ, data = client.uid("search", None, criterion)
             if typ != "OK":

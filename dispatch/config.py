@@ -47,6 +47,12 @@ class SMTPConfig(BaseModel):
     timeout: int = 30
     ssl: bool = False
 
+    @model_validator(mode="after")
+    def _one_tls_mode(self) -> "SMTPConfig":
+        if self.starttls and self.ssl:
+            raise ValueError("choose either starttls or ssl, not both")
+        return self
+
 
 class IMAPConfig(BaseModel):
     host: str = "imap.example.com"

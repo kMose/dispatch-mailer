@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from dispatch import db
 from dispatch.engine import preflight
@@ -52,7 +50,6 @@ def test_outside_window_waits_then_stops(campaign):
     contacts = [{"email": "a@example.com"}]
     cfg = campaign(contacts, window_enabled=True)
     window = cfg.campaign.send_window
-    now = datetime.now(window.tz)
     window.start = "00:00"
     window.end = "00:01"
     window.days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]

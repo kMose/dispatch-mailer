@@ -3,15 +3,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QRadioButton, QVBoxLayout, QWidget, QWizard, QWizardPage,
+    QMessageBox, QPushButton, QRadioButton, QVBoxLayout, QWizard, QWizardPage,
 )
 
 from ..config import FullConfig, default_config, write_config
 from ..mail import blocks
-from ..mail.secrets import SecretNotFound, store_secret
+from ..mail.secrets import store_secret
 from ..sheet.reader import SheetError, read_sheet
 
 STARTERS = Path(__file__).resolve().parent.parent / "templates" / "starters"
@@ -111,7 +110,6 @@ class SenderPage(QWizardPage):
                          "in the config file.")
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        from ..config import SenderConfig
         self.from_name = QLineEdit("Sam at Samlax")
         self.from_email = QLineEdit("sam@samlax.net")
         self.provider = _combo(list(PROVIDERS))

@@ -281,12 +281,13 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 97 tests, no network
+pytest                                   # 124 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
 The suite uses `aiosmtpd` on localhost for SMTP (including a 421 rate-limit case) and
-saved `.eml` fixtures for IMAP parsing. Coverage of `engine/` + `sheet/` is **86%**.
+saved `.eml` fixtures for IMAP parsing, plus offscreen Qt smoke tests for the main
+window and template builder. Coverage of `engine/` + `sheet/` is **89%**.
 
 Test map:
 
@@ -332,7 +333,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             97 tests + .eml fixtures
+tests/             124 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 
@@ -396,6 +397,30 @@ a literal reading, the reason.
     headers) painted near-black behind dark labels, which made the template builder's
     block fields unreadable. Scroll areas, viewports and wizard pages are also given an
     explicit light background.
+21. **Reliability fixes from the audit** (each has a regression test):
+    - Pause freezes *before* the next row is claimed — it no longer lets one extra
+      message out while the countdown is running.
+    - A window further than 24 h away (Friday evening → Monday) is waited for instead of
+      ending the run with `window_closed`.
+    - A rate-limit failure is reported as `failed_soft` (matching the database), not
+      `failed_hard`.
+    - Pre-flight judges a run started before the window opens against the window that is
+      about to open, not against zero seconds left.
+    - Write-back compares existing dates using `campaign.date_order`, and `.xlsm`
+      workbooks keep their VBA project.
+    - Re-importing a contact that had left the sheet restores its original id, so its
+      send history and review items stay attached.
+    - The IMAP watermark resets when `UIDVALIDITY` changes, so a recreated mailbox does
+      not hide replies forever.
+    - Opt-out scanning ignores quoted text, so our own unsubscribe footer in a quoted
+      reply no longer looks like an opt-out.
+    - The single-instance lock uses Qt's staleness check instead of never expiring (a
+      crash no longer locks the app out permanently).
+    - UI timers stop on close, and statistics never raise after the database is closed.
+    - A live pre-flight blocks on a placeholder SMTP host, a missing keyring password or
+      a missing postal address.
+    - Formulas in a date column are reported in pre-flight (an uncached formula reads as
+      "never advertised" and could otherwise cause a duplicate send).
 
 ### Not exercised here
 

@@ -146,10 +146,13 @@ class ImportStats:
 def import_contacts(conn: sqlite3.Connection, contacts: Iterable[Any]) -> ImportStats:
     """Upsert by normalized email so contact ids (and send history) survive re-imports."""
     stats = ImportStats()
-    existing: dict[str, int] = {
-        r["email_norm"]: r["id"]
-        for r in conn.execute("SELECT id, email_norm FROM contacts WHERE in_sheet=1")
-    }
+    # Include contacts that left the sheet earlier: if one comes back, it must keep its
+    # id so its send history and review items stay attached.
+    existing: dict[str, int] = {}
+    for r in conn.execute(
+        "SELECT id, email_norm FROM contacts ORDER BY in_sheet DESC, id ASC"
+    ):
+        existing.setdefault(r["email_norm"], r["id"])
     conn.execute("BEGIN IMMEDIATE")
     try:
         conn.execute("UPDATE contacts SET in_sheet=0 WHERE in_sheet=1")

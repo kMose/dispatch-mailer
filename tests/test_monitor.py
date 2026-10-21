@@ -64,6 +64,25 @@ def test_reply_with_in_reply_to_marks_replied_and_excludes_next_run(campaign):
     conn.close()
 
 
+def test_quoted_footer_does_not_look_like_an_opt_out(campaign):
+    cfg = campaign([{"email": "alice@example.com"}])
+    conn, contact_id = sent_contact(cfg, "alice@example.com", "<send-alice-001@samlax.net>")
+    raw = (b"From: Alice Perrin <alice@example.com>\n"
+           b"To: sam@samlax.net\nSubject: Re: Quick question\n"
+           b"In-Reply-To: <send-alice-001@samlax.net>\n"
+           b"Content-Type: text/plain; charset=UTF-8\n\n"
+           b"Thanks, that sounds good.\n\n"
+           b"On Mon, 19 Oct 2026 at 10:00, Sam <sam@samlax.net> wrote:\n"
+           b"> Samlax, 1 Test Street, London\n"
+           b"> Unsubscribe: https://samlax.net/u/3e6436b5400e2c5a\n")
+    events = monitor.parse_message(raw)
+    assert events[0].kind == "reply"
+    monitor.apply_message(conn, events[0], "sam")
+    assert not db.review_items(conn)
+    assert db.contact_by_id(conn, contact_id)["replied"] == 1
+    conn.close()
+
+
 def test_auto_reply_is_not_a_human_reply(campaign):
     cfg = campaign([{"email": "carol@example.com", "first_name": "Carol"}])
     conn, contact_id = sent_contact(cfg, "carol@example.com", "<send-carol-001@samlax.net>")

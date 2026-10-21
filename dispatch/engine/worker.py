@@ -7,7 +7,6 @@ would only need a second run row.
 from __future__ import annotations
 
 import asyncio
-import json
 import math
 import random
 import re
@@ -15,7 +14,7 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, time as dtime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from queue import Empty, Queue as ThreadQueue
 from typing import Any, Callable
@@ -244,8 +243,8 @@ class Worker(threading.Thread):
                 self._set_status("waiting", "outside send window")
                 self._emit("window", opens_at=opens.isoformat(), seconds=seconds)
                 self._log("info", f"outside the send window; next open {opens.strftime('%a %H:%M')}")
-                if seconds > 86400:
-                    return "window_closed"
+                # Wait for the window however far away it is (a Friday-evening start waits
+                # for Monday); stop stays interruptible at 0.2s granularity.
                 if not await self._sleep(seconds):
                     return "user_stop"
                 continue
@@ -395,13 +394,14 @@ class Worker(threading.Thread):
         q = self._queue
         assert q is not None
         if failure.kind in ("hard", "rate_limit"):
-            q.commit_failed(sid, SendState.FAILED_HARD if failure.kind == "hard"
-                            else SendState.FAILED_SOFT, failure.code, failure.message)
+            state = (SendState.FAILED_HARD if failure.kind == "hard"
+                     else SendState.FAILED_SOFT)
+            q.commit_failed(sid, state, failure.code, failure.message)
             if failure.kind == "hard":
                 db.add_suppression(conn, row.email, "hard_bounce", "smtp")
                 self._log("error", f"hard rejection for {mask_email(row.email)} "
                                    f"[{failure.code}] — suppressed")
-            self._emit("failed", email=row.email, state="failed_hard",
+            self._emit("failed", email=row.email, state=state.value,
                        error=failure.message[:300])
         elif failure.kind == "auth":
             q.commit_failed(sid, SendState.FAILED_SOFT, failure.code, failure.message)
@@ -477,7 +477,10 @@ class Worker(threading.Thread):
             if self._stop_event.is_set():
                 return False
             if self.paused:
-                return True
+                # Freeze here: returning to the loop would let the caller claim and
+                # send one more message after the operator pressed Pause.
+                await asyncio.sleep(0.2)
+                continue
             remaining = self._next_at - time.monotonic()
             if remaining <= 0:
                 return True

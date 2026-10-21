@@ -1,10 +1,8 @@
 """Pre-flight report dialog: counts, feasibility arithmetic, typed confirmation."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPushButton,
-    QSpinBox, QTextBrowser, QVBoxLayout,
+    QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QSpinBox, QTextBrowser, QVBoxLayout,
 )
 
 from .. import db

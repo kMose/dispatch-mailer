@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-import pytest
-from openpyxl import load_workbook
 
 from dispatch.sheet.reader import read_sheet, parse_date_cell, parse_date_text
 

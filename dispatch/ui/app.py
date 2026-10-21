@@ -4,19 +4,19 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile, QSettings, QStandardPaths, Qt
+from PySide6.QtCore import QLockFile, QStandardPaths
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..config import ConfigError, FullConfig, load_config
-from .. import db
 from .theme import QSS, light_palette
 
 
 def _single_instance_lock(app: QApplication) -> QLockFile | None:
     base = QStandardPaths.writableLocation(QStandardPaths.TempLocation)
     lock = QLockFile(str(Path(base) / "dispatch-mailer.lock"))
-    lock.setStaleLockTime(0)
+    # Keep Qt's default staleness check: staleLockTime=0 would make a crashed run lock
+    # the app out permanently (the lock file would never be considered stale).
     if not lock.tryLock(100):
         QMessageBox.information(
             None, "Dispatch is already running",

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import csv
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -116,7 +115,8 @@ class ReportDialog(QDialog):
         try:
             updates = sheet_writer.collect_updates(self.conn, self.run_id)
             changes = sheet_writer.plan(self.cfg.sheet_file, updates,
-                                        self.cfg.campaign.sheet_tab)
+                                        self.cfg.campaign.sheet_tab,
+                                        date_order=self.cfg.campaign.date_order)
         except Exception as exc:
             QMessageBox.warning(self, "Cannot write", f"{type(exc).__name__}: {exc}")
             return
@@ -129,7 +129,8 @@ class ReportDialog(QDialog):
             return
         try:
             result = sheet_writer.write_back(self.cfg.sheet_file, updates,
-                                             self.cfg.campaign.sheet_tab)
+                                             self.cfg.campaign.sheet_tab,
+                                             date_order=self.cfg.campaign.date_order)
         except sheet_writer.SheetLockedError as exc:
             QMessageBox.warning(self, "Sheet is open in Excel", str(exc))
             return
