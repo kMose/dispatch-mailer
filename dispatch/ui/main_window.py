@@ -86,10 +86,11 @@ class MainWindow(QMainWindow):
         outer.setSpacing(10)
 
         self.dry_banner = QLabel(
-            "DRY RUN — no email leaves this machine. Messages are written to ./outbox as "
-            ".eml at the configured pace (the same throttle and window as a live run)."
+            "DRY RUN — nothing is sent. Messages go to ./outbox at the configured pace."
         )
         self.dry_banner.setObjectName("DryBanner")
+        # Without wrapping this one label forces a 2004 px minimum window width.
+        self.dry_banner.setWordWrap(True)
         self.dry_banner.setVisible(self.cfg.safety.dry_run)
         outer.addWidget(self.dry_banner)
 
@@ -100,9 +101,13 @@ class MainWindow(QMainWindow):
         title_box = QVBoxLayout()
         self.title = QLabel(self.cfg.campaign.name)
         self.title.setObjectName("Title")
-        self.subtitle = QLabel(f"{self.cfg.sender.from_email} · "
-                               f"{Path(self.cfg.sheet_file).name}")
+        self.subtitle = QLabel(self.cfg.sender.from_email)
         self.subtitle.setObjectName("Subtitle")
+        self.subtitle.setToolTip(f"{self.cfg.sender.from_email} — "
+                                 f"{Path(self.cfg.sheet_file).name}")
+        self.title.setToolTip(self.cfg.campaign.name)
+        self.title.setMaximumWidth(360)
+        self.subtitle.setMaximumWidth(360)
         title_box.addWidget(self.title)
         title_box.addWidget(self.subtitle)
         top_row.addLayout(title_box)
@@ -114,8 +119,9 @@ class MainWindow(QMainWindow):
         counter_box = QVBoxLayout()
         self.counter = QLabel(f"0 / {self.cfg.campaign.quota} (0%)")
         self.counter.setObjectName("Counter")
-        self.counter_note = QLabel("nothing sent yet this run")
+        self.counter_note = QLabel("not started")
         self.counter_note.setObjectName("Subtitle")
+        self.counter_note.setMaximumWidth(220)
         counter_box.addWidget(self.counter)
         counter_box.addWidget(self.counter_note)
         top_row.addSpacing(24)
@@ -124,8 +130,10 @@ class MainWindow(QMainWindow):
         time_box = QVBoxLayout()
         self.eta = QLabel("ETA —")
         self.eta.setObjectName("Muted")
-        self.elapsed = QLabel("Elapsed 0m 00s")
+        self.elapsed = QLabel("0m 00s elapsed")
         self.elapsed.setObjectName("Muted")
+        for label in (self.eta, self.elapsed):
+            label.setMaximumWidth(180)
         time_box.addWidget(self.eta)
         time_box.addWidget(self.elapsed)
         top_row.addSpacing(24)
@@ -178,17 +186,24 @@ class MainWindow(QMainWindow):
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.ElideRight)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(26)
         self.table.horizontalHeader().setStretchLastSection(False)
         header = self.table.horizontalHeader()
-        widths = {"#": 46, "Sheet row": 70, "Name": 150, "Email": 220,
-                  "Last advertised": 110, "Eligible": 130, "Status": 120,
-                  "Sent at": 140, "Error": 240}
+        header.setMinimumSectionSize(34)
+        widths = {"#": 34, "Sheet row": 48, "Name": 100, "Email": 150,
+                  "Last advertised": 92, "Eligible": 70, "Status": 104,
+                  "Sent at": 100, "Error": 130}
+        self.table.setMinimumWidth(700)
         for i, column in enumerate(["#", "Sheet row", "Name", "Email", "Last advertised",
                                     "Eligible", "Status", "Sent at", "Error"]):
             self.table.setColumnWidth(i, widths[column])
             header.setSectionResizeMode(i, QHeaderView.Interactive)
-        header.setSectionResizeMode(8, QHeaderView.Stretch)
+        # Email absorbs the spare width; Error keeps a fixed, readable column instead of
+        # eating half the grid.
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
         left_layout.addWidget(self.table, 1)
 
         log_head = QHBoxLayout()
@@ -355,7 +370,7 @@ class MainWindow(QMainWindow):
                 "name": name or "—",
                 "email": row["email"] or "(blank)",
                 "last_advertised": (row["last_advertised"] or "")[:10],
-                "eligible": "Yes" if verdict.eligible else verdict.label,
+                "eligible": "Yes" if verdict.eligible else "No",
                 "eligible_detail": verdict.reason or "",
                 "status": status,
                 "sent_at": (row["last_sent"] or "")[:16].replace("T", " "),
@@ -496,10 +511,10 @@ class MainWindow(QMainWindow):
         pct = round(100 * sent / quota)
         self.counter.setText(f"{sent} / {quota} ({pct}%)")
         self.counter_note.setText(f"{event.get('failed', 0)} failed · "
-                                  f"{event.get('remaining', 0)} remaining")
+                                  f"{event.get('remaining', 0)} left")
         eta = int(event.get("eta_seconds", 0))
         self.eta.setText("ETA " + _dur(eta) if eta else "ETA —")
-        self.elapsed.setText("Elapsed " + _dur(int(event.get("elapsed", 0))))
+        self.elapsed.setText(_dur(int(event.get("elapsed", 0))) + " elapsed")
 
     def _update_countdown(self) -> None:
         if self._countdown is None:
@@ -691,8 +706,9 @@ class MainWindow(QMainWindow):
             self.dry_banner.setVisible(self.cfg.safety.dry_run)
             self.title.setText(self.cfg.campaign.name)
             self.setWindowTitle(f"Dispatch — {self.cfg.campaign.name}")
-            self.subtitle.setText(f"{self.cfg.sender.from_email} · "
-                                  f"{Path(self.cfg.sheet_file).name}")
+            self.subtitle.setText(self.cfg.sender.from_email)
+            self.subtitle.setToolTip(f"{self.cfg.sender.from_email} — "
+                                     f"{Path(self.cfg.sheet_file).name}")
             self.pacing_label2.setText(
                 f"Timer: {self.cfg.throttle.mode} · "
                 f"~{self.cfg.throttle.mean_seconds():.0f}s between sends")

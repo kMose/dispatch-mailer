@@ -49,6 +49,23 @@ def test_main_window_lists_contacts_and_filters(qtbot, campaign, contacts_12):
     win.close()
 
 
+def test_main_window_fits_a_1280_screen(qtbot, campaign, contacts_12):
+    cfg = campaign(contacts_12, dry_run=True)
+    win = _window(qtbot, cfg)
+    assert win.minimumSizeHint().width() <= 1280, (
+        f"window cannot shrink below {win.minimumSizeHint().width()}px"
+    )
+    # friendly status text, not the internal token
+    from dispatch.ui.models import COLUMNS
+    from PySide6.QtCore import Qt
+    status_col = COLUMNS.index("Status")
+    labels = {win.model.data(win.model.index(r, status_col), Qt.DisplayRole)
+              for r in range(win.model.rowCount())}
+    assert "Skipped — too soon" in labels
+    assert "skipped:too_soon" not in labels
+    win.close()
+
+
 def test_main_window_sorts_by_email(qtbot, campaign, contacts_12):
     from PySide6.QtCore import Qt
     cfg = campaign(contacts_12, dry_run=True)

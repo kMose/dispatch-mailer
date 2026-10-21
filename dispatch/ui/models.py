@@ -9,6 +9,22 @@ from PySide6.QtGui import QBrush, QColor, QFont
 COLUMNS = ["#", "Sheet row", "Name", "Email", "Last advertised",
            "Eligible", "Status", "Sent at", "Error"]
 
+STATUS_LABELS = {
+    "pending": "Pending",
+    "queued": "Queued",
+    "sending": "Sending",
+    "sent": "Sent",
+    "failed_soft": "Failed (soft)",
+    "failed_hard": "Failed (hard)",
+    "unknown": "Unknown — review",
+    "skipped:ignored": "Skipped — ignored",
+    "skipped:suppressed": "Skipped — suppressed",
+    "skipped:replied": "Skipped — replied",
+    "skipped:invalid": "Skipped — invalid",
+    "skipped:duplicate": "Skipped — duplicate",
+    "skipped:too_soon": "Skipped — too soon",
+}
+
 ROW_COLORS = {
     "sending": QColor("#fff4d6"),
     "queued": QColor("#f4f7fb"),
@@ -53,8 +69,11 @@ class ContactTableModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             value = row.get(_key_for(col), "")
-            if col == "Status" and value == "sent" and row.get("dry"):
-                return "sent (dry)"
+            if col == "Status":
+                raw = str(value)
+                if raw == "sent" and row.get("dry"):
+                    return "Sent (dry)"
+                return STATUS_LABELS.get(raw, raw.replace("_", " "))
             return "" if value is None else str(value)
         if role == Qt.UserRole:
             value = row.get(_key_for(col), "")
