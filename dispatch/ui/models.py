@@ -121,6 +121,7 @@ class ContactFilterProxy(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.kind = "all"
+        self.search_text = ""
         self.setSortRole(Qt.UserRole)
         self.setDynamicSortFilter(True)
 
@@ -128,11 +129,20 @@ class ContactFilterProxy(QSortFilterProxyModel):
         self.kind = kind
         self.invalidateFilter()
 
+    def set_search(self, text: str) -> None:
+        self.search_text = text.strip().lower()
+        self.invalidateFilter()
+
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:  # noqa: N802
         model = self.sourceModel()
         if model is None:
             return True
         row = model.rows[source_row]
+        if self.search_text:
+            haystack = " ".join(str(row.get(key, "")) for key in
+                                ("name", "email", "sheet_row", "company")).lower()
+            if self.search_text not in haystack:
+                return False
         status = str(row.get("status", ""))
         kind = self.kind
         if kind == "all":

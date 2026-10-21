@@ -159,10 +159,10 @@ def _button(block: Mapping[str, Any]) -> str:
 
 
 def _divider(_: Mapping[str, Any]) -> str:
-    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-            f'border="0" style="margin:8px 0 22px 0;"><tr>'
-            f'<td style="border-top:1px solid #e5e7eb;font-size:1px;line-height:1px;">'
-            f'&nbsp;</td></tr></table>')
+    return ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            'border="0" style="margin:8px 0 22px 0;"><tr>'
+            '<td style="border-top:1px solid #e5e7eb;font-size:1px;line-height:1px;">'
+            '&nbsp;</td></tr></table>')
 
 
 def _spacer(block: Mapping[str, Any]) -> str:

@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QSpinBox, QTextBrowser, QVBoxLayout,
+    QDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton, QSpinBox,
+    QTextBrowser, QVBoxLayout,
 )
 
 from .. import db
@@ -33,6 +34,18 @@ class PreflightDialog(QDialog):
         self.dry.setWordWrap(True)
         layout.addWidget(self.dry)
 
+        # Four summary tiles; the detail below is for the cases you actually need.
+        tiles = QHBoxLayout()
+        tiles.setSpacing(10)
+        self.tile_eligible = self._make_tile("Eligible")
+        self.tile_skipped = self._make_tile("Skipped")
+        self.tile_projected = self._make_tile("Projected time")
+        self.tile_left = self._make_tile("Left today")
+        for frame, _value in (self.tile_eligible, self.tile_skipped,
+                              self.tile_projected, self.tile_left):
+            tiles.addWidget(frame, 1)
+        layout.addLayout(tiles)
+
         self.body = QTextBrowser()
         self.body.setOpenExternalLinks(False)
         layout.addWidget(self.body, 1)
@@ -52,23 +65,48 @@ class PreflightDialog(QDialog):
         quota_row.addWidget(self.quota_note, 1)
         layout.addLayout(quota_row)
 
-        buttons = QDialogButtonBox()
-        self.start_btn = buttons.addButton("Start", QDialogButtonBox.AcceptRole)
-        self.start_btn.setObjectName("Primary")
-        self.start_btn.setEnabled(report.ok and report.planned > 0)
-        self.recheck_btn = buttons.addButton("Re-check inbox first", QDialogButtonBox.ActionRole)
-        buttons.addButton(QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self._start)
-        buttons.rejected.connect(self.reject)
+        button_row = QHBoxLayout()
+        self.recheck_btn = QPushButton("Re-check inbox first")
         self.recheck_btn.clicked.connect(self._recheck)
-        layout.addWidget(buttons)
+        button_row.addWidget(self.recheck_btn)
+        button_row.addStretch(1)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        self.start_btn = QPushButton("Start")
+        self.start_btn.setObjectName("Primary")
+        self.start_btn.clicked.connect(self._start)
+        self.start_btn.setEnabled(report.ok and report.planned > 0)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(self.start_btn)
+        layout.addLayout(button_row)
 
         self._render()
         self._quota_changed(self.quota_spin.value())
 
+    @staticmethod
+    def _make_tile(caption: str):
+        frame = QFrame()
+        frame.setObjectName("Card")
+        frame.setMinimumHeight(62)
+        box = QVBoxLayout(frame)
+        box.setContentsMargins(12, 8, 12, 8)
+        box.setSpacing(2)
+        value = QLabel("—")
+        value.setObjectName("Big")
+        label = QLabel(caption)
+        label.setObjectName("Muted")
+        box.addWidget(value)
+        box.addWidget(label)
+        return frame, value
+
     # -- rendering -------------------------------------------------------
     def _render(self) -> None:
         r = self.report
+        from ..engine.feasibility import human_duration
+        self.tile_eligible[1].setText(str(r.eligible))
+        self.tile_skipped[1].setText(str(sum(r.by_reason.values())))
+        self.tile_projected[1].setText(human_duration(self.quota_spin.value() * r.mean_seconds))
+        self.tile_left[1].setText(str(r.daily_remaining))
         self.headline.setText(r.headline())
         if self.cfg.safety.dry_run:
             self.dry.setText("DRY RUN is on — this run writes .eml files to ./outbox "
@@ -105,6 +143,8 @@ class PreflightDialog(QDialog):
                 f"~{max(1, round(value * mean / 60))} min at the current timer · "
                 f"{self.report.eligible} eligible · {self.report.daily_remaining} left today"
             )
+        from ..engine.feasibility import human_duration
+        self.tile_projected[1].setText(human_duration(value * mean))
         self.start_btn.setEnabled(self.report.ok and value > 0)
 
     # -- actions ---------------------------------------------------------

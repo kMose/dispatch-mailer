@@ -284,7 +284,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 127 tests, no network
+pytest                                   # 130 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -340,7 +340,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             127 tests, .eml fixtures, offscreen UI smoke tests
+tests/             130 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 
@@ -409,7 +409,13 @@ a literal reading, the reason.
     not send in that run (a reply can arrive at any time). Only TRUE is ever written.
 22. **The pre-flight quota spinner is capped** at `min(eligible, remaining daily/warm-up
     allowance)`, so a run cannot be started that would stop halfway at the cap.
-23. **Reliability fixes from the audit** (each has a regression test):
+23. **The interface is tuned for a 1280-wide screen**: the main window's minimum width
+    is 1179 px (it was 2004 px because of the dry-run banner), table rows are single-line
+    and elided, Email stretches while Error stays fixed, internal status tokens are shown
+    as plain English, the contact grid has a search box, Settings uses five tabs,
+    pre-flight opens with four summary tiles, the top bar carries a progress bar, and the
+    onboarding pages are centred in a 560 px column.
+24. **Reliability fixes from the audit** (each has a regression test):
     - Pause freezes *before* the next row is claimed — it no longer lets one extra
       message out while the countdown is running.
     - A window further than 24 h away (Friday evening → Monday) is waited for instead of

@@ -65,6 +65,11 @@ QPushButton {
 QPushButton:hover { background: #f9fafb; }
 QPushButton:pressed { background: #eef2f6; }
 QPushButton:disabled { color: #98a2b3; background: #f2f4f7; }
+QPushButton:focus { border: 1px solid #1a5fb4; background: #eef4fd; }
+QPushButton#Primary:focus { border: 2px solid #101828; }
+QTableView:focus { border: 1px solid #1a5fb4; }
+QProgressBar { background: #e9edf2; border: none; border-radius: 3px; }
+QProgressBar::chunk { background: #1a5fb4; border-radius: 3px; }
 QPushButton#Primary {
     background: #1a5fb4; border: 1px solid #1a5fb4; color: #ffffff; font-weight: 600;
 }
@@ -106,6 +111,17 @@ QScrollArea > QWidget > QWidget { background: #f5f6f8; }
 QScrollArea QWidget#qt_scrollarea_viewport { background: #f5f6f8; }
 QLabel { background: transparent; }
 QWizard, QWizardPage { background: #f5f6f8; }
+QTabWidget::pane {
+    border: 1px solid #e3e6ea; border-radius: 8px; background: #f5f6f8; top: -1px;
+}
+QTabBar::tab {
+    background: #eef2f6; color: #475467; padding: 7px 14px; margin-right: 2px;
+    border-radius: 6px 6px 0 0;
+}
+QTabBar::tab:selected {
+    background: #ffffff; color: #101828; font-weight: 600;
+    border: 1px solid #e3e6ea; border-bottom-color: #ffffff;
+}
 QGroupBox {
     border: 1px solid #e3e6ea; border-radius: 8px; margin-top: 14px;
     background: #ffffff; padding-top: 10px;

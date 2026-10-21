@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QButtonGroup, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPushButton, QRadioButton, QVBoxLayout, QWizard, QWizardPage,
+    QMessageBox, QPushButton, QRadioButton, QVBoxLayout, QWidget, QWizard, QWizardPage,
 )
 
 from ..config import FullConfig, default_config, write_config
@@ -49,7 +49,12 @@ class SheetPage(QWizardPage):
         self.wizard_ref = wizard
         self.setTitle("1. Where is your contact list?")
         self.setSubTitle("An .xlsx workbook with a header row. A column named Email is required.")
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(32, 24, 32, 24)
+        content = QWidget()
+        content.setMaximumWidth(560)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         row = QHBoxLayout()
         self.path_edit = QLineEdit()
         self.path_edit.setPlaceholderText("C:/path/to/leads.xlsx")
@@ -63,6 +68,15 @@ class SheetPage(QWizardPage):
         self.info.setWordWrap(True)
         layout.addWidget(self.info)
         layout.addStretch(1)
+        wrap = QVBoxLayout()
+        wrap.addStretch(1)
+        row_wrap = QHBoxLayout()
+        row_wrap.addStretch(1)
+        row_wrap.addWidget(content)
+        row_wrap.addStretch(1)
+        wrap.addLayout(row_wrap)
+        wrap.addStretch(1)
+        outer.addLayout(wrap, 1)
         self.path_edit.textChanged.connect(self._validate)
 
     def _browse(self) -> None:
@@ -108,7 +122,12 @@ class SenderPage(QWizardPage):
         self.setTitle("2. Which account sends the mail?")
         self.setSubTitle("One sender account. The password is stored in your OS keyring, never "
                          "in the config file.")
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(32, 24, 32, 24)
+        content = QWidget()
+        content.setMaximumWidth(560)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         form = QFormLayout()
         self.from_name = QLineEdit("Sam at Samlax")
         self.from_email = QLineEdit("sam@samlax.net")
@@ -131,6 +150,15 @@ class SenderPage(QWizardPage):
         note.setObjectName("Muted")
         layout.addWidget(note)
         layout.addStretch(1)
+        wrap = QVBoxLayout()
+        wrap.addStretch(1)
+        row_wrap = QHBoxLayout()
+        row_wrap.addStretch(1)
+        row_wrap.addWidget(content)
+        row_wrap.addStretch(1)
+        wrap.addLayout(row_wrap)
+        wrap.addStretch(1)
+        outer.addLayout(wrap, 1)
         self.provider.currentTextChanged.connect(self._provider_changed)
 
     def _provider_changed(self, name: str) -> None:
@@ -146,7 +174,12 @@ class TemplatePage(QWizardPage):
         self.wizard_ref = wizard
         self.setTitle("3. Pick a starting template")
         self.setSubTitle("You can edit every word later in the template builder.")
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(32, 24, 32, 24)
+        content = QWidget()
+        content.setMaximumWidth(560)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.group = QButtonGroup(self)
         for index, (key, label, description) in enumerate(STARTER_INFO):
             radio = QRadioButton(label)
@@ -161,6 +194,15 @@ class TemplatePage(QWizardPage):
             caption.setContentsMargins(24, 0, 0, 8)
             layout.addWidget(caption)
         layout.addStretch(1)
+        wrap = QVBoxLayout()
+        wrap.addStretch(1)
+        row_wrap = QHBoxLayout()
+        row_wrap.addStretch(1)
+        row_wrap.addWidget(content)
+        row_wrap.addStretch(1)
+        wrap.addLayout(row_wrap)
+        wrap.addStretch(1)
+        outer.addLayout(wrap, 1)
 
     def starter(self) -> str:
         button = self.group.checkedButton()

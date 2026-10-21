@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
     QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
-    QScrollArea, QSpinBox, QVBoxLayout, QWidget,
+    QScrollArea, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from ..config import FullConfig, write_config
@@ -25,17 +25,25 @@ class SettingsDialog(QDialog):
         self.cfg = cfg
         self.cfg_path = cfg_path
         self.setWindowTitle("Settings")
-        self.resize(720, 760)
+        self.resize(760, 660)
         outer = QVBoxLayout(self)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.viewport().setAutoFillBackground(False)
-        holder = QWidget()
-        layout = QVBoxLayout(holder)
-        layout.setSpacing(12)
-        scroll.setWidget(holder)
-        outer.addWidget(scroll, 1)
+        self.tabs = QTabWidget()
+        outer.addWidget(self.tabs, 1)
+
+        def make_page(*groups: QWidget) -> QScrollArea:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.viewport().setAutoFillBackground(False)
+            holder = QWidget()
+            page_layout = QVBoxLayout(holder)
+            page_layout.setContentsMargins(14, 14, 14, 14)
+            page_layout.setSpacing(12)
+            for group in groups:
+                page_layout.addWidget(group)
+            page_layout.addStretch(1)
+            scroll.setWidget(holder)
+            return scroll
 
         # -- account -----------------------------------------------------
         account = QGroupBox("Sending account")
@@ -58,7 +66,6 @@ class SettingsDialog(QDialog):
         form.addRow("", self.password_status)
         form.addRow("", save_pw)
         form.addRow("secret_ref", self.secret_ref)
-        layout.addWidget(account)
 
         # -- servers -----------------------------------------------------
         servers = QGroupBox("SMTP / IMAP")
@@ -89,7 +96,6 @@ class SettingsDialog(QDialog):
         row2 = QHBoxLayout(); row2.addWidget(self.imap_ssl)
         row2.addWidget(QLabel("Mailbox")); row2.addWidget(self.imap_box); row2.addStretch(1)
         grid.addLayout(row2, 5, 0, 1, 2)
-        layout.addWidget(servers)
 
         # -- campaign ----------------------------------------------------
         campaign = QGroupBox("Campaign & limits")
@@ -125,7 +131,6 @@ class SettingsDialog(QDialog):
         row3 = QHBoxLayout(); row3.addWidget(QLabel("Random min")); row3.addWidget(self.random_min)
         row3.addWidget(QLabel("max")); row3.addWidget(self.random_max); row3.addStretch(1)
         cform.addRow("Random seconds", row3)
-        layout.addWidget(campaign)
 
         # -- window ------------------------------------------------------
         window = QGroupBox("Send window")
@@ -150,7 +155,6 @@ class SettingsDialog(QDialog):
         wform.addRow("End (HH:MM)", self.window_end)
         wform.addRow("Days", days_row)
         wform.addRow("Timezone", self.tz)
-        layout.addWidget(window)
 
         # -- safety ------------------------------------------------------
         safety = QGroupBox("Safety")
@@ -165,7 +169,6 @@ class SettingsDialog(QDialog):
         sform.addRow("", self.dry_run)
         sform.addRow("Typed confirmation over", self.typed_over)
         sform.addRow("Stop on failure rate", self.stop_rate)
-        layout.addWidget(safety)
 
         # -- compliance --------------------------------------------------
         compliance = QGroupBox("Compliance footer (program-generated, cannot be removed)")
@@ -176,8 +179,12 @@ class SettingsDialog(QDialog):
         comp.addRow("Postal address", self.postal)
         comp.addRow("Unsubscribe URL", self.unsub_url)
         comp.addRow("Unsubscribe mailto", self.unsub_mail)
-        layout.addWidget(compliance)
-        layout.addStretch(1)
+
+        self.tabs.addTab(make_page(account), "Account")
+        self.tabs.addTab(make_page(servers), "Servers")
+        self.tabs.addTab(make_page(campaign), "Campaign")
+        self.tabs.addTab(make_page(window), "Window")
+        self.tabs.addTab(make_page(safety, compliance), "Safety")
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         suppression_btn = buttons.addButton("Suppression & review…",

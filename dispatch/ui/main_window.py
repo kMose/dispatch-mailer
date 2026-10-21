@@ -13,7 +13,8 @@ from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QDialog, QFileDialog, QFrame,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QPlainTextEdit, QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget,
+    QPlainTextEdit, QProgressBar, QPushButton, QSplitter, QTableView, QVBoxLayout,
+    QWidget,
 )
 
 from .. import db
@@ -96,8 +97,10 @@ class MainWindow(QMainWindow):
 
         top = QFrame()
         top.setObjectName("Card")
-        top_row = QHBoxLayout(top)
-        top_row.setContentsMargins(16, 12, 16, 12)
+        top_outer = QVBoxLayout(top)
+        top_outer.setContentsMargins(16, 12, 16, 10)
+        top_outer.setSpacing(8)
+        top_row = QHBoxLayout()
         title_box = QVBoxLayout()
         self.title = QLabel(self.cfg.campaign.name)
         self.title.setObjectName("Title")
@@ -151,6 +154,14 @@ class MainWindow(QMainWindow):
         top_row.addWidget(self.start_btn)
         top_row.addWidget(self.pause_btn)
         top_row.addWidget(self.stop_btn)
+        top_outer.addLayout(top_row)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(6)
+        self.progress.setObjectName("RunProgress")
+        top_outer.addWidget(self.progress)
         outer.addWidget(top)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -159,6 +170,13 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         chips = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search name or email…")
+        self.search.setClearButtonEnabled(True)
+        self.search.setMaximumWidth(220)
+        self.search.textChanged.connect(self._set_search)
+        chips.addWidget(self.search)
+        chips.addSpacing(6)
         self.chip_group = QButtonGroup(self)
         self.chip_group.setExclusive(True)
         for index, (key, label) in enumerate(FILTERS):
@@ -384,6 +402,9 @@ class MainWindow(QMainWindow):
     def _set_filter(self, kind: str) -> None:
         self.proxy.set_kind(kind)
 
+    def _set_search(self, text: str) -> None:
+        self.proxy.set_search(text)
+
     # -------------------------------------------------------------- worker
     def start_campaign(self) -> None:
         if self.worker and self.worker.is_alive():
@@ -403,6 +424,7 @@ class MainWindow(QMainWindow):
         self.reload_contacts()
         self.worker = Worker(self.cfg, quota=quota, on_event=self._on_worker_event,
                              prepared=True)
+        self.progress.setValue(0)
         self.worker.start()
         self._set_running_controls(True)
         self.pause_btn.setText("Pause")
@@ -510,6 +532,7 @@ class MainWindow(QMainWindow):
         quota = int(event.get("quota", self.cfg.campaign.quota)) or 1
         pct = round(100 * sent / quota)
         self.counter.setText(f"{sent} / {quota} ({pct}%)")
+        self.progress.setValue(pct)
         self.counter_note.setText(f"{event.get('failed', 0)} failed · "
                                   f"{event.get('remaining', 0)} left")
         eta = int(event.get("eta_seconds", 0))

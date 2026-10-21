@@ -14,6 +14,7 @@ from dispatch.config import load_config  # noqa: E402
 from dispatch.engine import preflight  # noqa: E402
 from dispatch.ui.main_window import MainWindow  # noqa: E402
 from dispatch.ui.preflight import PreflightDialog  # noqa: E402
+from dispatch.ui.settings import SettingsDialog  # noqa: E402
 from dispatch.ui.suppression import SuppressionDialog  # noqa: E402
 from dispatch.ui.template_builder import TemplateBuilderDialog  # noqa: E402
 
@@ -64,6 +65,33 @@ def test_main_window_fits_a_1280_screen(qtbot, campaign, contacts_12):
     assert "Skipped — too soon" in labels
     assert "skipped:too_soon" not in labels
     win.close()
+
+
+def test_contact_search_filters_the_table(qtbot, campaign, contacts_12):
+    cfg = campaign(contacts_12, dry_run=True)
+    win = _window(qtbot, cfg)
+    win.search.setText("alice")
+    assert win.proxy.rowCount() == 2  # Alice and the duplicate ALICE row
+    win.search.setText("zzz-nobody")
+    assert win.proxy.rowCount() == 0
+    win.search.clear()
+    assert win.proxy.rowCount() == 12
+    win.close()
+
+
+def test_settings_has_tabs_and_saves(qtbot, campaign, quiet_boxes):
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    dialog = SettingsDialog(cfg, cfg.config_path)
+    qtbot.addWidget(dialog)
+    assert dialog.tabs.count() == 5
+    assert [dialog.tabs.tabText(i) for i in range(5)] == [
+        "Account", "Servers", "Campaign", "Window", "Safety",
+    ]
+    dialog.tabs.setCurrentIndex(2)
+    dialog.campaign_name.setText("Renamed campaign")
+    dialog._save()
+    assert cfg.campaign.name == "Renamed campaign"
+    dialog.close()
 
 
 def test_main_window_sorts_by_email(qtbot, campaign, contacts_12):
@@ -140,6 +168,9 @@ def test_preflight_quota_is_clipped_to_daily_allowance(qtbot, campaign):
     assert report.eligible == 5
     assert report.daily_remaining == 2
     assert dialog.quota_spin.maximum() == 2
+    assert dialog.tile_eligible[1].text() == "5"
+    assert dialog.tile_left[1].text() == "2"
+    assert dialog.tile_projected[1].text() != "—"
     dialog.close()
     conn.close()
 
