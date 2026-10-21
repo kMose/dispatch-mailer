@@ -38,6 +38,13 @@ No config yet? `python -m dispatch` opens a three-step wizard: choose spreadshee
 choose provider + account (password goes to the OS keyring) → pick a starter template.
 It writes `campaign.yaml` and `templates/` beside your spreadsheet.
 
+`campaign.yaml` is deliberately **not** committed (it holds machine-specific paths and
+provider hosts). For a fresh clone, either run the wizard or:
+
+```bash
+cp campaign.example.yaml campaign.yaml   # then edit hosts/addresses
+```
+
 Or bootstrap from the CLI:
 
 ```bash
