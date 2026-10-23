@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile, QStandardPaths
+from PySide6.QtCore import QLockFile, QSettings, QStandardPaths
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -35,6 +35,11 @@ def _find_config(argv: list[str]) -> Path | None:
     for candidate in (Path.cwd() / "campaign.yaml", Path(sys.argv[0]).resolve().parent / "campaign.yaml"):
         if candidate.exists():
             return candidate
+    # Last campaign opened, so double-clicking the .exe does not fall back to the wizard
+    # just because its working directory is dist/Dispatch.
+    last = QSettings().value("last_config")
+    if last and Path(str(last)).exists():
+        return Path(str(last))
     return None
 
 
@@ -72,6 +77,8 @@ def run(argv: list[str] | None = None) -> int:
         path = wizard.config_path
         if cfg is None or path is None:
             return 0
+
+    QSettings().setValue("last_config", str(path))
 
     from .main_window import MainWindow
     window = MainWindow(cfg, path)

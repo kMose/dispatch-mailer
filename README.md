@@ -51,6 +51,25 @@ Or bootstrap from the CLI:
 dispatch init --dir ./my-campaign      # writes campaign.yaml + templates + sample leads.xlsx
 ```
 
+### Running the packaged app on Windows
+
+Double-click **`Run Dispatch.cmd`** in the campaign folder. It starts
+`dist\Dispatch\Dispatch.exe` with `campaign.yaml` passed explicitly, so it works no matter
+what the current directory is.
+
+Equivalently, from a terminal:
+
+```bat
+cd "C:\path\to\campaign"
+dist\Dispatch\Dispatch.exe "C:\path\to\campaign\campaign.yaml"
+```
+
+Don't double-click `Dispatch.exe` by itself on first use: Windows makes its working
+directory `dist\Dispatch`, so it cannot see `campaign.yaml` and opens the setup wizard.
+After one successful start Dispatch remembers the last campaign in the registry, so a
+plain double-click then reopens it. Only one copy can run at a time — a lock stops two
+windows writing the same spreadsheet.
+
 ### One-command demo (safe)
 
 ```bash

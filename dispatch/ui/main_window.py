@@ -763,6 +763,9 @@ class MainWindow(QMainWindow):
             pass
         self.cfg = cfg
         self.cfg_path = path
+        if path is not None:
+            from PySide6.QtCore import QSettings
+            QSettings().setValue("last_config", str(path))
         self.conn = db.connect(cfg.db_path)
         db.init_db(self.conn)
         # Filters from the previous campaign would hide the new contacts.
