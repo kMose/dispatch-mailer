@@ -154,7 +154,7 @@ Paths are resolved relative to the config file.
 | `safety.dry_run` | **Default true.** Must be false for real mail |
 | `safety.require_typed_confirmation_over` | Typed confirmation threshold |
 | `safety.stop_on_failure_rate` | Stop when the recent failure rate exceeds this |
-| `warmup.enabled` / `ramp` | Weekly ceiling; effective cap = `min(daily_cap, ramp[week])` |
+| `warmup.enabled` / `ramp` | Weekly ceiling; effective cap = `min(daily_cap, ramp[week])`. Before the first send the clock is at week 0, so `ramp[0]` applies |
 | `sender.*` | From name/address, Reply-To, SMTP, IMAP, `secret_ref` |
 | `template.kind` | `blocks` or `raw` (inferred from the `.json` if absent) |
 | `template.subject` | Subject template with placeholders |
@@ -352,7 +352,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 152 tests, no network
+pytest                                   # 154 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -408,7 +408,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             152 tests, .eml fixtures, offscreen UI smoke tests
+tests/             154 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

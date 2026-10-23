@@ -58,6 +58,18 @@ def test_blocked_when_quota_does_not_fit(campaign):
     assert "Blocked" in report.headline()
 
 
+def test_warmup_cap_applies_before_the_clock_starts(campaign, contacts_12):
+    """No first-send date yet is week 0: the first run must use ramp[0], not daily_cap."""
+    cfg = campaign(contacts_12, quota=200, warmup=True)
+    conn = fresh(cfg)
+    report = preflight.run_preflight(cfg, conn, quota=200)
+    conn.close()
+
+    assert report.warmup_cap == 30
+    assert report.daily_remaining == 30
+    assert report.planned == min(report.eligible, 30)
+
+
 def test_warmup_cap_clips_the_plan(campaign):
     contacts = [{"email": f"w{i}@example.com"} for i in range(20)]
     cfg = campaign(contacts, quota=20, warmup=True)
@@ -68,6 +80,19 @@ def test_warmup_cap_clips_the_plan(campaign):
     conn.close()
     assert report.warmup_cap == 5
     assert report.planned == 5
+
+
+def test_warmup_cap_walks_the_ramp_weekly(campaign):
+    cfg = campaign([{"email": "a@example.com"}], warmup=True)
+    cfg.warmup.ramp = [30, 60, 100]
+    start = date(2026, 10, 1)
+
+    assert cfg.effective_warmup_cap(None, start, 200) == 30
+    assert cfg.effective_warmup_cap(start, date(2026, 10, 7), 200) == 30
+    assert cfg.effective_warmup_cap(start, date(2026, 10, 8), 200) == 60
+    assert cfg.effective_warmup_cap(start, date(2026, 10, 20), 200) == 100
+    assert cfg.effective_warmup_cap(start, date(2026, 12, 1), 200) == 100
+    assert cfg.effective_warmup_cap(start, date(2026, 12, 1), 50) == 50
 
 
 def test_daily_cap_reached_blocks_planning(campaign):

@@ -290,9 +290,15 @@ class FullConfig(BaseModel):
 
     # -- behaviour -----------------------------------------------------
     def effective_warmup_cap(self, first_send: date | None, today: date, daily_cap: int) -> int:
-        if not self.warmup.enabled or not first_send or not self.warmup.ramp:
+        """Daily ceiling for the current warm-up week.
+
+        Before the first send the clock has not started yet, which is still week 0: the
+        first day must use ramp[0], not the full daily cap. Returning daily_cap here let
+        the very first run send 200 before warm-up applied at all.
+        """
+        if not self.warmup.enabled or not self.warmup.ramp:
             return daily_cap
-        weeks = max(0, (today - first_send).days // 7)
+        weeks = 0 if first_send is None else max(0, (today - first_send).days // 7)
         ramp = self.warmup.ramp
         ceiling = ramp[min(weeks, len(ramp) - 1)]
         return min(daily_cap, ceiling)
