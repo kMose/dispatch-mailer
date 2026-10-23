@@ -13,6 +13,8 @@ dispatch.sqlite3-shm
 *.dispatch-backup.xlsx
 campaign-backup-*/
 campaign.yaml.bak*
+.history/
+.autosave/
 ~$*.xlsx
 .pytest_cache/
 .coverage

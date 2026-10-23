@@ -285,7 +285,8 @@ def _inject_footer(html: str, footer: str) -> str:
 
 
 def build_message(cfg, values: Mapping[str, Any], message_id: str | None = None,
-                  *, to: str | None = None, subject: str | None = None,
+                  *, to: str | None = None, bcc: list[str] | None = None,
+                  subject: str | None = None,
                   html_body: str | None = None, text_body: str | None = None,
                   extra_headers: Mapping[str, str] | None = None) -> EmailMessage:
     recipient = to or str(values.get("Email", ""))
@@ -296,6 +297,9 @@ def build_message(cfg, values: Mapping[str, Any], message_id: str | None = None,
     msg = EmailMessage()
     msg["From"] = formataddr((cfg.sender.from_name, cfg.sender.from_email))
     msg["To"] = recipient
+    extra = [sanitize_header("Bcc", address) for address in (bcc or []) if address.strip()]
+    if extra:
+        msg["Bcc"] = ", ".join(extra)
     msg["Subject"] = subject if subject is not None else render_subject(cfg, values)
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = message_id or make_msgid(domain=cfg.sender.from_email.split("@")[-1])

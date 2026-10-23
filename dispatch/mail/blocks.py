@@ -18,7 +18,8 @@ MUTED = "#5b6773"
 LINK = "#1a5fb4"
 BUTTON_BG = "#1a5fb4"
 
-BLOCK_TYPES = ["heading", "paragraph", "image", "button", "divider", "spacer"]
+BLOCK_TYPES = ["heading", "paragraph", "list", "image", "button", "signature",
+               "divider", "spacer"]
 
 DEFAULT_DOC = {
     "version": 1,
@@ -37,6 +38,7 @@ _LINK_MD = re.compile(r"\[([^\]]+)\]\((https://[^\s)]+)\)")
 _ANY_LINK_MD = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
 _BOLD_MD = re.compile(r"\*\*([^*]+)\*\*")
 _ITALIC_MD = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
+_UNDERLINE_MD = re.compile(r"__([^_]+)__")
 # Placeholders must survive HTML escaping so the engine can still parse `|default:"…"`.
 _PLACEHOLDER = re.compile(r"\{[^{}|]+(?:\|[^{}]*)?\}")
 
@@ -69,6 +71,7 @@ def inline_markdown(text: str, *, escape: bool = True) -> str:
 
     out = _LINK_MD.sub(link, out)
     out = _BOLD_MD.sub(r'<strong style="font-weight:600;">\1</strong>', out)
+    out = _UNDERLINE_MD.sub(r'<u style="text-decoration:underline;">\1</u>', out)
     out = _ITALIC_MD.sub(r"<em>\1</em>", out)
     return out
 
@@ -102,21 +105,84 @@ def _style(base: str, extra: str = "") -> str:
     return f"{base};{extra}" if extra else base
 
 
+_ALIGNMENTS = {"left", "center", "right", "justify"}
+_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _align(block: Mapping[str, Any], default: str = "left") -> str:
+    value = str(block.get("align") or default).lower()
+    return value if value in _ALIGNMENTS else default
+
+
+def _color(value: Any, default: str) -> str:
+    text = str(value or "").strip()
+    return text if _COLOR_RE.match(text) else default
+
+
+def text_with_breaks(text: str) -> str:
+    """Inline markdown per line, joined with real <br> tags.
+
+    HTML collapses bare newlines, so a message typed with line breaks used to arrive as
+    one run-on paragraph. Each line is rendered separately and joined, which also keeps
+    markdown from spanning a line break.
+    """
+    lines = str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "<br>".join(inline_markdown(line) for line in lines)
+
+
 def _heading(block: Mapping[str, Any]) -> str:
     level = int(block.get("level") or 2)
     level = min(max(level, 1), 3)
     size = {1: 24, 2: 20, 3: 17}[level]
-    text = inline_markdown(str(block.get("text", "")))
+    text = text_with_breaks(str(block.get("text", "")))
     return (f'<h{level} style="margin:0 0 14px 0;font-family:{FONT};font-size:{size}px;'
-            f'line-height:1.3;font-weight:600;color:{TEXT_COLOR};">{text}</h{level}>')
+            f'line-height:1.3;font-weight:600;color:{TEXT_COLOR};'
+            f'text-align:{_align(block)};">{text}</h{level}>')
 
 
 def _paragraph(block: Mapping[str, Any]) -> str:
-    text = inline_markdown(str(block.get("text", "")))
+    text = text_with_breaks(str(block.get("text", "")))
     if not text.strip():
         return ""
     return (f'<p style="margin:0 0 16px 0;font-family:{FONT};font-size:16px;'
-            f'line-height:1.5;color:{TEXT_COLOR};">{text}</p>')
+            f'line-height:1.5;color:{TEXT_COLOR};text-align:{_align(block)};">{text}</p>')
+
+
+def _list(block: Mapping[str, Any]) -> str:
+    tag = "ol" if str(block.get("style") or "bullet") == "number" else "ul"
+    items = [line for line in str(block.get("text", "")).splitlines() if line.strip()]
+    if not items:
+        return ""
+    lis = "".join(
+        f'<li style="margin:0 0 6px 0;">{inline_markdown(line)}</li>' for line in items
+    )
+    return (f'<{tag} style="margin:0 0 16px 0;padding-left:24px;font-family:{FONT};'
+            f'font-size:16px;line-height:1.5;color:{TEXT_COLOR};'
+            f'text-align:{_align(block)};">{lis}</{tag}>')
+
+
+def _signature(block: Mapping[str, Any]) -> str:
+    name = str(block.get("name") or "").strip()
+    title = str(block.get("title") or "").strip()
+    company = str(block.get("company") or "").strip()
+    phone = str(block.get("phone") or "").strip()
+    email = str(block.get("email") or "").strip()
+    link = str(block.get("link") or "").strip()
+    lines = [inline_markdown(line) for line in (name, title, company, phone) if line]
+    if email:
+        lines.append(f'<a href="mailto:{html_mod.escape(email, quote=True)}" '
+                     f'style="color:{LINK};text-decoration:none;">'
+                     f'{html_mod.escape(email)}</a>')
+    if link.startswith("https://"):
+        lines.append(f'<a href="{html_mod.escape(link, quote=True)}" '
+                     f'style="color:{LINK};text-decoration:none;">'
+                     f'{html_mod.escape(link)}</a>')
+    if not lines:
+        return ""
+    body = "<br>".join(lines)
+    return (f'<div style="margin:24px 0 8px 0;padding-top:14px;border-top:1px solid #e5e7eb;'
+            f'font-family:{FONT};font-size:14px;line-height:1.6;color:#667085;'
+            f'text-align:{_align(block)};">{body}</div>')
 
 
 def _image(block: Mapping[str, Any]) -> str:
@@ -137,24 +203,34 @@ def _image(block: Mapping[str, Any]) -> str:
             raise BlockError(f"image link must start with https:// ({link})")
         img = (f'<a href="{html_mod.escape(str(link), quote=True)}" target="_blank" '
                f'style="text-decoration:none;">{img}</a>')
-    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-            f'border="0" style="margin:0 0 20px 0;"><tr><td align="{align}">'
-            f'{img}</td></tr></table>')
+    caption = str(block.get("caption") or "").strip()
+    cap = ""
+    if caption:
+        cap = (f'<div style="margin:8px 0 0 0;font-family:{FONT};font-size:13px;'
+               f'line-height:1.4;color:{MUTED};text-align:{align};">'
+               f'{inline_markdown(caption)}</div>')
+    return (f'<div style="margin:0 0 20px 0;">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0"><tr><td align="{align}">{img}</td></tr></table>{cap}</div>')
 
 
 def _button(block: Mapping[str, Any]) -> str:
     url = str(block.get("url") or "").strip()
     if not url.startswith("https://"):
         raise BlockError(f"button URL must start with https:// ({url or 'missing'})")
-    label = html_mod.escape(str(block.get("text") or "Learn more"), quote=True)
+    label = inline_markdown(str(block.get("text") or "Learn more"))
+    align = _align(block, "center")
+    bg = _color(block.get("bg"), BUTTON_BG)
+    fg = _color(block.get("color"), "#ffffff")
     return (
-        f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
-        f'style="margin:6px 0 22px 0;"><tr>'
-        f'<td align="center" bgcolor="{BUTTON_BG}" style="border-radius:4px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="margin:6px 0 22px 0;"><tr><td align="{align}">'
+        f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td align="center" bgcolor="{bg}" style="border-radius:4px;background-color:{bg};">'
         f'<a href="{html_mod.escape(url, quote=True)}" target="_blank" '
         f'style="display:inline-block;padding:12px 24px;font-family:{FONT};font-size:15px;'
-        f'line-height:1.2;color:#ffffff;text-decoration:none;border-radius:4px;">{label}</a>'
-        f'</td></tr></table>'
+        f'line-height:1.2;color:{fg};text-decoration:none;border-radius:4px;">{label}</a>'
+        f'</td></tr></table></td></tr></table>'
     )
 
 
@@ -174,8 +250,10 @@ def _spacer(block: Mapping[str, Any]) -> str:
 RENDERERS = {
     "heading": _heading,
     "paragraph": _paragraph,
+    "list": _list,
     "image": _image,
     "button": _button,
+    "signature": _signature,
     "divider": _divider,
     "spacer": _spacer,
 }
@@ -250,6 +328,17 @@ def html_to_text(html: str, width: int = 72) -> str:
             return href
         return f"{label} ({href})"
 
+    def list_repl(match: re.Match) -> str:
+        ordered = match.group(1).lower() == "ol"
+        items = re.findall(r"<li[^>]*>(.*?)</li\s*>", match.group(2), re.I | re.S)
+        lines = []
+        for number, item in enumerate(items, start=1):
+            text = _LINK_RE.sub(link_repl, item)
+            text = html_mod.unescape(_TAG_RE.sub("", text)).strip()
+            lines.append(f"{number}. {text}" if ordered else f"• {text}")
+        return "\n\n" + "\n".join(lines) + "\n\n"
+
+    s = re.sub(r"<(ul|ol)[^>]*>(.*?)</\1\s*>", list_repl, s, flags=re.I | re.S)
     s = _LINK_RE.sub(link_repl, s)
     s = _BR_RE.sub("\n", s)
     s = _BLOCK_END_RE.sub("\n\n", s)
@@ -261,11 +350,15 @@ def html_to_text(html: str, width: int = 72) -> str:
 
     paragraphs: list[str] = []
     for para in s.split("\n\n"):
-        para = para.strip()
-        if not para:
+        lines = [line.strip() for line in para.split("\n") if line.strip()]
+        if not lines:
             continue
-        paragraphs.append(textwrap.fill(
-            para, width=width, break_long_words=False, break_on_hyphens=False
+        # Wrap each line separately so a deliberate <br> stays a line break in the
+        # plain-text alternative instead of being re-flowed into the previous line.
+        paragraphs.append("\n".join(
+            textwrap.fill(line, width=width, break_long_words=False,
+                          break_on_hyphens=False)
+            for line in lines
         ))
     return "\n\n".join(paragraphs) + "\n"
 
@@ -291,7 +384,8 @@ def validate_document(doc: Mapping[str, Any], columns: list[str] | None = None) 
     if not blocks:
         errors.append("Add at least one block.")
     paragraphs = [b for b in blocks if b.get("type") == "paragraph"]
-    words = sum(len(re.findall(r"[A-Za-z]{2,}", str(b.get("text", "")))) for b in paragraphs)
+    words = sum(len(re.findall(r"[A-Za-z]{2,}", str(b.get("text", ""))))
+                for b in blocks if b.get("type") in ("paragraph", "list"))
     if not paragraphs or words < 3:
         errors.append("Include at least one paragraph of real words (image-only email is a spam signal).")
 
@@ -310,9 +404,13 @@ def validate_document(doc: Mapping[str, Any], columns: list[str] | None = None) 
     check_placeholders(subject, "Subject")
     for i, block in enumerate(blocks, start=1):
         btype = block.get("type")
-        for field in ("text", "alt"):
+        for field in ("text", "alt", "caption"):
             if block.get(field):
                 check_placeholders(block[field], f"Block {i} ({btype})")
+        if btype == "signature":
+            for field in ("name", "title", "company", "phone", "email", "link"):
+                if block.get(field):
+                    check_placeholders(block[field], f"Block {i} (signature)")
         if btype in ("image", "button"):
             url = str(block.get("url") or "")
             check_placeholders(url, f"Block {i} ({btype})")
@@ -334,14 +432,45 @@ def validate_document(doc: Mapping[str, Any], columns: list[str] | None = None) 
             warnings.append(f"Block {i}: image has no alt text.")
         if btype == "heading" and int(block.get("level") or 2) not in (1, 2, 3):
             warnings.append(f"Block {i}: heading level must be 1-3.")
+        if btype == "list" and not [
+                line for line in str(block.get("text", "")).splitlines() if line.strip()]:
+            warnings.append(f"Block {i}: list has no items.")
+        if btype == "signature" and not str(block.get("name") or "").strip():
+            warnings.append(f"Block {i}: signature has no name.")
+        if btype == "button" and not str(block.get("text") or "").strip():
+            warnings.append(f"Block {i}: button has no label.")
+
+    # ---- quality checks (warnings only: they are judgement calls, not breakage)
+    letters = [c for c in subject if c.isalpha()]
+    if len(letters) >= 8 and subject.upper() == subject:
+        warnings.append("Subject is ALL CAPS — it reads as shouting and trips spam filters.")
+    spam_words = ("act now", "buy now", "click here", "free money", "limited time",
+                  "risk-free", "guarantee", "urgent", "winner", "100% free")
+    lowered = subject.lower()
+    for phrase in spam_words:
+        if phrase in lowered:
+            warnings.append(f"Subject contains the spam-trigger phrase '{phrase}'.")
+    for label, url in _ANY_LINK_MD.findall(str(doc.get("subject", ""))):
+        if label.strip() == url.strip():
+            warnings.append("Subject link text is the raw URL; use a readable label.")
+
+    for i, block in enumerate(blocks, start=1):
+        for label, url in _ANY_LINK_MD.findall(str(block.get("text", ""))):
+            if label.strip() == url.strip():
+                warnings.append(f"Block {i}: link text is the raw URL ({label}).")
 
     try:
         rendered = render_document_html(doc)
         if len(rendered.encode("utf-8")) > 100 * 1024:
             warnings.append("Generated HTML is over 100 KB; Gmail may clip it.")
+        link_count = len(re.findall(r"<a\s", rendered, re.I))
+        if link_count > 8:
+            warnings.append(f"{link_count} links in one email — keep it under 8.")
         body_text = html_to_text(rendered)
         if re.search(r"\bHi\s*,", body_text) or re.search(r"\bHi\s+there\s*,", body_text):
             errors.append("Greeting reads 'Hi ,' after rendering — check the default filter.")
+        if len(body_text.strip()) < 120:
+            warnings.append("Body text is very short — image-heavy emails land in spam more.")
     except BlockError as exc:
         errors.append(str(exc))
 

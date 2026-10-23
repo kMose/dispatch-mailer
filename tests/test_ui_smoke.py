@@ -25,6 +25,9 @@ def quiet_boxes(monkeypatch):
     for name in ("information", "warning", "critical"):
         monkeypatch.setattr(QMessageBox, name,
                             staticmethod(lambda *a, **k: QMessageBox.Ok))
+    # Treat any confirmation as "discard": tests must never sit on a modal dialog.
+    monkeypatch.setattr(QMessageBox, "question",
+                        staticmethod(lambda *a, **k: QMessageBox.No))
 
 
 def _window(qtbot, cfg):
@@ -199,6 +202,99 @@ def test_template_builder_opens_another_template(qtbot, campaign, tmp_path, quie
     dialog._save()
     assert (tmp_path / "second.html").exists()
     assert (tmp_path / "second.txt").exists()
+    dialog.close()
+
+
+def test_builder_undo_redo_and_duplicate_block(qtbot, campaign, quiet_boxes):
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    dialog = TemplateBuilderDialog(cfg, None)
+    qtbot.addWidget(dialog)
+    start = len(dialog.doc["blocks"])
+
+    dialog._add_block("divider")
+    assert len(dialog.doc["blocks"]) == start + 1
+    dialog._undo()
+    assert len(dialog.doc["blocks"]) == start
+    dialog._redo()
+    assert len(dialog.doc["blocks"]) == start + 1
+
+    dialog.current = 0
+    dialog._duplicate_block()
+    assert len(dialog.doc["blocks"]) == start + 2
+    assert dialog.doc["blocks"][0] == dialog.doc["blocks"][1]
+    dialog._saved_json = dialog._snapshot_json()
+    dialog.close()
+
+
+def test_builder_drag_reorder_updates_the_document(qtbot, campaign, quiet_boxes):
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    dialog = TemplateBuilderDialog(cfg, None)
+    qtbot.addWidget(dialog)
+    before = [block["type"] for block in dialog.doc["blocks"]]
+
+    item = dialog.block_list.takeItem(0)
+    dialog.block_list.addItem(item)
+    dialog._reorder_from_list()
+
+    assert [block["type"] for block in dialog.doc["blocks"]] == before[1:] + before[:1]
+    dialog._saved_json = dialog._snapshot_json()
+    dialog.close()
+
+
+def test_builder_autosave_and_history(qtbot, campaign, quiet_boxes):
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    dialog = TemplateBuilderDialog(cfg, None)
+    qtbot.addWidget(dialog)
+    dialog.current = 0
+    dialog._rebuild_editor()
+    dialog._commit("text", "Changed body text for autosave")
+
+    dialog._autosave()
+    autosave = dialog._autosave_path()
+    assert autosave is not None and autosave.exists()
+
+    assert dialog._save() is True
+    assert not autosave.exists()
+    assert dialog._is_dirty() is False
+    assert dialog._history_dir().exists()
+
+    dialog.close()
+
+
+def test_builder_preview_width_and_template_library(qtbot, campaign, quiet_boxes):
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    dialog = TemplateBuilderDialog(cfg, None)
+    qtbot.addWidget(dialog)
+
+    dialog._set_preview_width(375)
+    assert dialog.preview.width() == 375
+    assert dialog.mobile_btn.isChecked() and not dialog.desktop_btn.isChecked()
+    dialog._set_preview_width(600)
+    assert dialog.desktop_btn.isChecked()
+
+    assert dialog.template_combo.count() >= 1
+    assert dialog.template_combo.currentText() == "personal_note"
+    assert "/60" in dialog.subject_hint.text()
+    dialog._saved_json = dialog._snapshot_json()
+    dialog.close()
+
+
+def test_builder_renders_html_and_builds_a_bcc_test_message(qtbot, campaign, quiet_boxes):
+    from dispatch.mail import compose
+
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    dialog = TemplateBuilderDialog(cfg, None)
+    qtbot.addWidget(dialog)
+
+    values, html, text, subject = dialog._render_current()
+    assert "<html" in html.lower()
+    assert subject
+    message = compose.build_message(
+        cfg, values, to="a@example.com", bcc=["b@example.com"],
+        subject=subject, html_body=html, text_body=text)
+    assert "b@example.com" in str(message["Bcc"])
+
+    dialog._saved_json = dialog._snapshot_json()
     dialog.close()
 
 

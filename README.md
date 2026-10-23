@@ -243,12 +243,39 @@ Two kinds, both consumed by the engine as rendered artifacts:
   regenerates `<name>.html` and `<name>.txt` and rewrites the paths in `campaign.yaml`.
   **Open…** loads any block `.json` into the builder and makes it the campaign's active
   template; **New…** starts from a built-in starter; **Save as…** writes a copy.
+
+Builder features:
+
+- **Line breaks are kept.** Enter inside a paragraph becomes a real `<br>` in HTML and a
+  newline in the plain-text part; blank lines stay blank.
+- **Per-block alignment**: left, centre, right or justified, for headings, paragraphs,
+  lists and signatures; buttons and images get left/centre/right.
+- **Blocks**: heading, paragraph, bulleted/numbered list, image (alt, caption,
+  click-through, width, alignment), button (label, URL, text/background colour,
+  alignment), signature, divider, spacer.
+- **Editing**: unlimited undo/redo, duplicate block, drag to reorder (or Alt+↑/↓),
+  Delete key when the block list is focused. Ctrl+S save, Ctrl+Shift+S save as, Ctrl+O
+  open, Ctrl+D duplicate, Ctrl+B/I/U/K formatting.
+- **Template library**: a dropdown of every `.json` in `templates/`, plus **Rename…**
+  (renames the file, not just the label) and **History…** (last five saves per template,
+  one-click restore).
+- **Autosave**: a draft is written every 30 seconds; if Dispatch closes unexpectedly the
+  next open offers to restore it.
+- **Preview**: desktop (600 px) and mobile (375 px) widths, merged subject and preheader
+  with character counts, HTML source view, and `.eml` export.
+- **Send test…** accepts several addresses (first is To, the rest are Bcc).
+- **Footer…** edits the postal address and unsubscribe links without leaving the builder.
+- **Quality checks** run with *Validate*: missing alt text, ALL-CAPS subject, spam-trigger
+  phrases, too many links, very short body, unknown placeholders, link text that is just
+  a raw URL.
+- **Placeholders insert at the cursor** in whichever field has focus.
 - **raw** — a hand-written `.html`/`.txt` pair, opened read-only in the builder.
 
 Placeholders: any spreadsheet column by name, plus `{Email}`, `{UnsubscribeURL}`,
 `{UnsubscribeToken}`, `{PostalAddress}`. Filters: `|default:"text"`, `|upper`, `|title`,
 `|trim` (also `|lower`). Markdown subset inside blocks: `**bold**`, `*italic*`,
-`[label](https://url)`; everything else is escaped.
+`__underline__`, `[label](https://url)`; everything else is escaped and newlines become
+`<br>`.
 
 Generated HTML is a single-column table layout with inline styles only — no flexbox, grid,
 `<style>`, scripts, web fonts or CSS variables. Every image has `alt`, `width`,
@@ -325,7 +352,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 136 tests, no network
+pytest                                   # 152 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -381,7 +408,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             136 tests, .eml fixtures, offscreen UI smoke tests
+tests/             152 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

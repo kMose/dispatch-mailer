@@ -1,9 +1,20 @@
-Something new at Samlax
+https://samlax.net
 
-https://samlax.net/october
+{FirstName} {LastName},
 
-Hi {FirstName|default:"there"}, we have changed how the October range
-works — fewer options, clearer prices, faster shipping.
+My name is Sam Lax, from Sam Lax Used Furniture, a New York City
+Department of Education licensed vendor.
+
+We specialize in used school furniture. Cafeteria Tables, combo desks,
+standalone desks/chairs, from preschool to adult sized. All of which are
+competitively priced and available for immediate delivery anywhere in
+NYC.
+
+Our mission goes beyond savings. By giving quality furniture a second
+life, we help schools reduce waste and support a more sustainable city.
+
+If your school could use additional or replacement furniture, look no
+further.
 
 Everything is live now. If you would rather not hear from us again, the
 unsubscribe link below works immediately.
