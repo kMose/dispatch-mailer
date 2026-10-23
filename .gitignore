@@ -15,6 +15,11 @@ campaign-backup-*/
 campaign.yaml.bak*
 .history/
 .autosave/
+# live campaign templates: keep the example three, ignore the rest
+templates/*
+!templates/promo.json
+!templates/promo.html
+!templates/promo.txt
 ~$*.xlsx
 .pytest_cache/
 .coverage
