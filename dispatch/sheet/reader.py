@@ -7,6 +7,7 @@ understand.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -46,6 +47,16 @@ KNOWN_HEADERS = {
 }
 
 DATE_COLUMNS = {"last_advertised", "last_contacted"}
+
+# Salutation is kept in `extra` so it survives round-trips without a schema column, but
+# these header spellings all map to the canonical `{Salutation}` placeholder.
+SALUTATION_HEADERS = {"salutation", "honorific", "prefix", "nameprefix"}
+
+_SALUTATION_CANON = {
+    "mr": "Mr.", "mrs": "Mrs.", "ms": "Ms.", "miss": "Miss", "mx": "Mx.",
+    "dr": "Dr.", "prof": "Prof.", "sir": "Sir", "madam": "Madam",
+    "dame": "Dame", "rev": "Rev.",
+}
 
 _ISO_RE = re.compile(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T].*)?$")
 _DMY_RE = re.compile(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$")
@@ -294,7 +305,10 @@ def read_sheet(path: str | Path, tab: str | None = None,
                 if key:
                     values[key] = raw
                 elif not _blank(raw):
-                    extra[header or f"Column{idx}"] = _raw_text(raw)
+                    if norm_header(header) in SALUTATION_HEADERS:
+                        extra["Salutation"] = normalize_salutation(raw)
+                    else:
+                        extra[header or f"Column{idx}"] = _raw_text(raw)
 
             email = _raw_text(values.get("email")) or ""
             if not email:
@@ -384,13 +398,31 @@ def _formula_date_rows(path: Path, tab: str, header_row: int,
         wb.close()
 
 
-def _raw_text(value: Any) -> str | None:
+def _raw_text(value: Any) -> str:
+    """Normalise a cell: trim, collapse runs of spaces, drop invisible characters.
+
+    Spreadsheets routinely arrive with non-breaking spaces, tabs, stray newlines and
+    double spaces around names. Collapsing them here means `{FirstName}` can never render
+    as `John   ` or `John\\u00a0` and greetings do not gain a phantom gap.
+    """
     if value is None:
-        return None
+        return ""
     if isinstance(value, datetime):
         return value.isoformat(sep=" ")
     if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
-    return str(value).strip()
+    text = unicodedata.normalize("NFKC", str(value))
+    text = text.replace("\u00a0", " ").replace("\u2007", " ").replace("\u202f", " ")
+    text = re.sub(r"[\t\r\n\v\f]+", " ", text)
+    text = re.sub(r"[\u200b\u200c\u200d\ufeff\u2060]", "", text)
+    text = re.sub(r" {2,}", " ", text)
+    return text.strip()
+
+
+def normalize_salutation(value: Any) -> str:
+    """`Mr`, `MR`, `Mr.` -> `Mr.`; unknown values are only cleaned, never invented."""
+    text = _raw_text(value)
+    key = text.rstrip(".").strip().lower()
+    return _SALUTATION_CANON.get(key, text)

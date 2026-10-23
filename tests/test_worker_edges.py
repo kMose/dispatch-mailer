@@ -68,17 +68,23 @@ def test_outside_window_waits_then_stops(campaign):
     assert worker.stop_reason == "user_stop"
 
 
-def test_header_injection_row_is_not_sent(campaign, smtp_sink):
+def test_header_injection_in_a_name_is_neutralised(campaign, smtp_sink):
+    """A newline in a name is collapsed to a space during import.
+
+    The row is still sent, but the injected text can no longer become a header: the only
+    envelope recipient is the real address and the message has no Bcc header.
+    """
+    from email import message_from_bytes
+
     cfg = campaign([{"email": "a@example.com", "first_name": "Bob\nBcc: evil@x.com"}],
                    smtp_port=smtp_sink.port)
     prepare(cfg)
     worker, _ = run(cfg, quota=1, dry_run=False, prepared=True)
-    assert not smtp_sink.messages
-    assert worker.stats.failed == 1
-    conn = db.connect(cfg.db_path)
-    state = conn.execute("SELECT state FROM sends").fetchone()["state"]
-    conn.close()
-    assert state == "failed_hard"
+    assert len(smtp_sink.messages) == 1
+    assert smtp_sink.recipients == ["a@example.com"]
+    message = message_from_bytes(smtp_sink.messages[0]["data"])
+    assert message["Bcc"] is None
+    assert worker.stats.sent == 1
 
 
 def test_pause_halts_sending(campaign, smtp_sink):

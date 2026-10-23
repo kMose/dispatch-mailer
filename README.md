@@ -197,12 +197,19 @@ order does not matter. Every unlisted column is preserved verbatim, and so is fo
 | Column | Behaviour |
 |---|---|
 | `FirstName`, `LastName`, `Company` | Optional, used by placeholders |
+| `Salutation` (also `Honorific`, `Prefix`) | Optional; `Mr`, `MS`, `dr` are canonicalised to `Mr.`, `Ms.`, `Dr.` and exposed as `{Salutation}` |
 | `Email` | **Required** |
 | `LastAdvertised` | Program writes ISO date; never moves backwards |
 | `Replied` | Program may set TRUE only (one-way); written on every real flush |
 | `Ignore` | Read-only; truthy (`y/yes/true/1/x`) means skip |
 | `LastContacted` | Read-only |
 | `Status`, `LastError`, `Attempts` | Written only if the columns exist |
+
+Cell text is normalised on import: leading/trailing spaces are trimmed, runs of spaces,
+tabs and newlines collapse to one space, non-breaking spaces become normal spaces, and
+zero-width characters are dropped. That applies to names, company, salutation and every
+extra column, so `{FirstName}` cannot render as `John   ` and greetings do not acquire a
+phantom gap. The workbook itself is never rewritten merely by importing it.
 
 Write-back is atomic: temp file in the same directory, then `os.replace()`. It refuses to
 write while Excel's `~$<name>.xlsx` lock file exists. The workbook is rewritten on every
@@ -271,7 +278,7 @@ Builder features:
 - **Placeholders insert at the cursor** in whichever field has focus.
 - **raw** — a hand-written `.html`/`.txt` pair, opened read-only in the builder.
 
-Placeholders: any spreadsheet column by name, plus `{Email}`, `{UnsubscribeURL}`,
+Placeholders: any spreadsheet column by name, plus `{Salutation}`, `{Email}`, `{UnsubscribeURL}`,
 `{UnsubscribeToken}`, `{PostalAddress}`. Filters: `|default:"text"`, `|upper`, `|title`,
 `|trim` (also `|lower`). Markdown subset inside blocks: `**bold**`, `*italic*`,
 `__underline__`, `[label](https://url)`; everything else is escaped and newlines become
@@ -352,7 +359,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 154 tests, no network
+pytest                                   # 159 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -408,7 +415,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             154 tests, .eml fixtures, offscreen UI smoke tests
+tests/             159 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

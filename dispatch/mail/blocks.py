@@ -390,7 +390,7 @@ def validate_document(doc: Mapping[str, Any], columns: list[str] | None = None) 
         errors.append("Include at least one paragraph of real words (image-only email is a spam signal).")
 
     known = set(columns or []) | {
-        "Email", "FirstName", "LastName", "Company", "UnsubscribeURL",
+        "Email", "Salutation", "FirstName", "LastName", "Company", "UnsubscribeURL",
         "UnsubscribeToken", "PostalAddress", "LastAdvertised", "LastContacted",
     }
     known_norm = {re.sub(r"[\s_]+", "", k).lower() for k in known}
@@ -467,8 +467,9 @@ def validate_document(doc: Mapping[str, Any], columns: list[str] | None = None) 
         if link_count > 8:
             warnings.append(f"{link_count} links in one email — keep it under 8.")
         body_text = html_to_text(rendered)
-        if re.search(r"\bHi\s*,", body_text) or re.search(r"\bHi\s+there\s*,", body_text):
-            errors.append("Greeting reads 'Hi ,' after rendering — check the default filter.")
+        if re.search(r"\b(?:Hi|Hello|Dear)\s*,", body_text):
+            errors.append("Greeting reads 'Dear ,' (or similar) — the name/salutation is "
+                          "empty for this contact; add a |default: filter.")
         if len(body_text.strip()) < 120:
             warnings.append("Body text is very short — image-heavy emails land in spam more.")
     except BlockError as exc:
@@ -488,6 +489,7 @@ def new_document(name: str = "New template") -> dict[str, Any]:
 def sample_values(email: str = "john@example.com") -> dict[str, Any]:
     return {
         "Email": email,
+        "Salutation": "Mr.",
         "FirstName": "John",
         "LastName": "Smith",
         "Company": "Acme Ltd",

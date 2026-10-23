@@ -31,7 +31,7 @@ from ..mail.sender import SMTPFailure, SMTPTransport
 from ..sheet.reader import read_sheet
 
 STARTERS = Path(__file__).resolve().parent.parent / "templates" / "starters"
-BUILTIN_PLACEHOLDERS = ["FirstName", "LastName", "Email", "Company",
+BUILTIN_PLACEHOLDERS = ["Salutation", "FirstName", "LastName", "Email", "Company",
                         "UnsubscribeURL", "PostalAddress"]
 
 
@@ -819,8 +819,8 @@ class TemplateBuilderDialog(QDialog):
         index = self.sample_combo.currentIndex()
         if index <= 0 or not self.contacts:
             return {
-                "Email": "john@example.com", "FirstName": "John", "LastName": "Smith",
-                "Company": "Acme Ltd",
+                "Email": "john@example.com", "Salutation": "Mr.", "FirstName": "John",
+                "LastName": "Smith", "Company": "Acme Ltd",
             }
         return dict(self.contacts[min(index - 1, len(self.contacts) - 1)].as_template_values())
 
@@ -1137,6 +1137,16 @@ class TemplateBuilderDialog(QDialog):
             self.doc["preheader"] = self.preheader_edit.text()
             self.doc["name"] = self.name_edit.text()
             errors, warnings = blocks.validate_document(self.doc, self._headers())
+            uses_salutation = "{Salutation" in json.dumps(self.doc)
+            has_salutation = (
+                "Salutation" in self.columns
+                or any(c.as_template_values().get("Salutation") for c in self.contacts[:50])
+            )
+            if uses_salutation and not has_salutation:
+                warnings.append(
+                    "Template uses {Salutation} but this sheet has no Salutation/Honorific/"
+                    "Prefix column — it will render as an empty string."
+                )
         if show:
             if errors or warnings:
                 text = ""
