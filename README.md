@@ -148,6 +148,18 @@ Paths are resolved relative to the config file.
 from the OS keyring at send time and never written to YAML, SQLite, logs or `.eml` files.
 `env:VAR` is accepted for headless test rigs only.
 
+### Provider presets
+
+The setup wizard fills SMTP/IMAP automatically. For **GoDaddy / secureserver.net** use
+SMTP `smtpout.secureserver.net`, port `465`, *Implicit TLS*; IMAP
+`imap.secureserver.net`, port `993`, SSL. Do not use `smtp.secureserver.net` (that relay
+requires a whitelisted IP) and never put an `imap.*` host in the SMTP fields — the inbox
+checker then fails with `unexpected response: b'220 … SMTPAUTH …'`. Settings warns when
+the hosts look swapped.
+
+**New campaign** pre-fills the account, servers, keyring reference and offers *Keep the
+current template*, so a new lead list does not reset the email setup.
+
 ### Dates
 
 `LastAdvertised` and `LastContacted` accept real datetimes, Excel serial numbers and text
@@ -292,7 +304,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 133 tests, no network
+pytest                                   # 135 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -348,7 +360,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             133 tests, .eml fixtures, offscreen UI smoke tests
+tests/             135 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

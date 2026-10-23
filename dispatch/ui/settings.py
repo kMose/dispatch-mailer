@@ -227,6 +227,20 @@ class SettingsDialog(QDialog):
             cfg.sender.from_email = self.from_email.text().strip()
             cfg.sender.reply_to = self.reply_to.text().strip() or None
             cfg.sender.secret_ref = self.secret_ref.text().strip()
+            smtp_host = self.smtp_host.text().strip().lower()
+            imap_host = self.imap_host.text().strip().lower()
+            problems = []
+            if smtp_host.startswith("imap.") or self.smtp_port.value() == 993:
+                problems.append("SMTP points at an IMAP server (imap.* on port 993).")
+            if imap_host.startswith("smtp") or self.imap_port.value() in (465, 587):
+                problems.append("IMAP points at an SMTP server (smtp* on port 465/587).")
+            if problems:
+                QMessageBox.warning(
+                    self, "Servers look swapped",
+                    "\n".join(problems) + "\n\n"
+                    "For GoDaddy: SMTP smtpout.secureserver.net, port 465, "
+                    "'Implicit TLS' ticked; IMAP imap.secureserver.net, port 993, SSL.",
+                )
             cfg.sender.smtp.host = self.smtp_host.text().strip()
             cfg.sender.smtp.port = self.smtp_port.value()
             cfg.sender.smtp.starttls = self.smtp_starttls.isChecked()

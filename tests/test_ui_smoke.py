@@ -113,6 +113,58 @@ def test_reload_config_picks_up_a_changed_workbook(qtbot, tmp_path, quiet_boxes)
     win.close()
 
 
+def test_new_campaign_keeps_servers_and_template(qtbot, tmp_path):
+    from dispatch.ui.onboarding import OnboardingWizard
+    from tests.conftest import make_config, write_workbook
+
+    base, new = tmp_path / "old", tmp_path / "new"
+    base.mkdir()
+    new.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}], dry_run=True)
+    cfg.sender.smtp.host = "mail.private.example"
+    cfg.sender.smtp.port = 2525
+    cfg.sender.smtp.starttls = True
+    cfg.sender.smtp.ssl = False
+    cfg.sender.imap.host = "imap.private.example"
+    cfg.sender.imap.port = 143
+    cfg.sender.imap.ssl = False
+    cfg.sender.secret_ref = "keyring:dispatch/sam"
+
+    sheet = write_workbook(new / "NewLeads.xlsx", [{"email": "b@example.com"}])
+    wizard = OnboardingWizard(initial_config=cfg)
+    qtbot.addWidget(wizard)
+    wizard.sheet_page.path_edit.setText(str(sheet))
+    wizard.accept()
+
+    assert wizard.config is not None
+    assert wizard.config.sender.smtp.host == "mail.private.example"
+    assert wizard.config.sender.smtp.port == 2525
+    assert wizard.config.sender.smtp.starttls is True
+    assert wizard.config.sender.imap.host == "imap.private.example"
+    assert wizard.config.sender.imap.port == 143
+    assert wizard.config.sender.secret_ref == "keyring:dispatch/sam"
+    assert wizard.config.template.blocks_path == cfg.template.blocks_path
+
+
+def test_godaddy_preset_uses_implicit_tls(qtbot, tmp_path):
+    from dispatch.ui.onboarding import OnboardingWizard
+    from tests.conftest import write_workbook
+
+    sheet = write_workbook(tmp_path / "leads.xlsx", [{"email": "a@example.com"}])
+    wizard = OnboardingWizard()
+    qtbot.addWidget(wizard)
+    wizard.sheet_page.path_edit.setText(str(sheet))
+    wizard.sender_page.provider.setCurrentText("GoDaddy / secureserver.net")
+    wizard.accept()
+
+    assert wizard.config is not None
+    sender = wizard.config.sender
+    assert (sender.smtp.host, sender.smtp.port) == ("smtpout.secureserver.net", 465)
+    assert sender.smtp.ssl is True and sender.smtp.starttls is False
+    assert (sender.imap.host, sender.imap.port) == ("imap.secureserver.net", 993)
+    assert sender.imap.ssl is True
+
+
 def test_backup_campaign_copies_config_and_templates(tmp_path):
     (tmp_path / "campaign.yaml").write_text("campaign: {}\n", encoding="utf-8")
     templates = tmp_path / "templates"

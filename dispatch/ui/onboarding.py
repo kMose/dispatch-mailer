@@ -32,6 +32,11 @@ PROVIDERS = {
              "Use an app-specific password if MFA is enabled."),
     "iCloud": ("smtp.mail.me.com", 587, "imap.mail.me.com", 993,
                "Use an app-specific password from appleid.apple.com."),
+    "GoDaddy / secureserver.net": (
+        "smtpout.secureserver.net", 465, "imap.secureserver.net", 993,
+        "Sign in with the full email address. Port 465 is implicit SSL; 587 with "
+        "STARTTLS also works. Do not use smtp.secureserver.net — that relay needs a "
+        "whitelisted IP."),
     "Other / custom": ("", 587, "", 993, "Enter your provider's SMTP and IMAP hosts."),
 }
 
@@ -171,7 +176,7 @@ class SenderPage(QWizardPage):
 
 
 class TemplatePage(QWizardPage):
-    def __init__(self, wizard: "OnboardingWizard"):
+    def __init__(self, wizard: "OnboardingWizard", allow_keep: bool = False):
         super().__init__()
         self.wizard_ref = wizard
         self.setTitle("3. Pick a starting template")
@@ -183,10 +188,22 @@ class TemplatePage(QWizardPage):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         self.group = QButtonGroup(self)
-        for index, (key, label, description) in enumerate(STARTER_INFO):
+        if allow_keep:
+            keep = QRadioButton("Keep the current template")
+            keep.setProperty("starter", "keep")
+            keep.setChecked(True)
+            self.group.addButton(keep, 0)
+            layout.addWidget(keep)
+            caption = QLabel("Continue using the template this campaign already has, "
+                             "with its subject, blocks and images unchanged.")
+            caption.setObjectName("Muted")
+            caption.setWordWrap(True)
+            caption.setContentsMargins(24, 0, 0, 8)
+            layout.addWidget(caption)
+        for index, (key, label, description) in enumerate(STARTER_INFO, start=1):
             radio = QRadioButton(label)
             radio.setProperty("starter", key)
-            if index == 0:
+            if index == 1 and not allow_keep:
                 radio.setChecked(True)
             self.group.addButton(radio, index)
             layout.addWidget(radio)
@@ -243,10 +260,12 @@ class OnboardingWizard(QWizard):
         self.resize(760, 560)
         self.config: FullConfig | None = None
         self.config_path: Path | None = None
+        self._initial = initial_config
 
         self.sheet_page = SheetPage(self)
         self.sender_page = SenderPage(self)
-        self.template_page = TemplatePage(self)
+        self.template_page = TemplatePage(
+            self, allow_keep=bool(initial_config and initial_config.template.blocks_path))
         self.addPage(self.sheet_page)
         self.addPage(self.sender_page)
         self.addPage(self.template_page)
@@ -261,16 +280,25 @@ class OnboardingWizard(QWizard):
                       if v[0] == initial_config.sender.smtp.host),
                      "Other / custom")
             )
+            if initial_config.template.blocks_path:
+                self.sender_page.password.setPlaceholderText(
+                    "Leave blank to keep the saved password")
         self.sheet_page._validate()
 
     def accept(self) -> None:  # noqa: D401
         sheet = Path(self.sheet_page.path_edit.text().strip()).expanduser().resolve()
         base_dir = sheet.parent
         backup = backup_campaign(base_dir)
-        cfg = default_config(base_dir)
+        initial = self._initial
+        # A new campaign keeps the account, servers, password reference and template the
+        # user already configured. Only the sheet and destination folder change.
+        cfg = initial.model_copy(deep=True) if initial else default_config(base_dir)
+        cfg._base_dir = base_dir
         cfg.campaign.sheet_path = str(sheet)
         cfg.campaign.sheet_tab = None
-        cfg.campaign.date_order = "DMY"
+        cfg.campaign.name = sheet.stem
+        if initial is None:
+            cfg.campaign.date_order = "DMY"
 
         cfg.sender.from_name = self.sender_page.from_name.text().strip() or "Sender"
         cfg.sender.from_email = self.sender_page.from_email.text().strip()
@@ -280,32 +308,40 @@ class OnboardingWizard(QWizard):
         if smtp_host:
             cfg.sender.smtp.host = smtp_host
             cfg.sender.smtp.port = smtp_port
-            cfg.sender.smtp.starttls = True
+            cfg.sender.smtp.ssl = smtp_port == 465
+            cfg.sender.smtp.starttls = smtp_port != 465
             cfg.sender.imap.host = imap_host
             cfg.sender.imap.port = imap_port
-            cfg.sender.imap.ssl = True
-        cfg.sender.secret_ref = f"keyring:dispatch/{cfg.sender.id}"
+            cfg.sender.imap.ssl = imap_port == 993
+        elif initial is None:
+            cfg.sender.smtp.host = ""
+            cfg.sender.smtp.port = 587
+            cfg.sender.smtp.starttls = True
+            cfg.sender.smtp.ssl = False
+        if initial is None:
+            cfg.sender.secret_ref = f"keyring:dispatch/{cfg.sender.id}"
 
         starter = self.template_page.starter()
-        doc = blocks.load_document(STARTERS / f"{starter}.json")
-        name = "promo" if starter != "personal_note" else "personal_note"
-        doc["name"] = doc.get("name") or name
-        tdir = base_dir / "templates"
-        tdir.mkdir(parents=True, exist_ok=True)
-        json_path = tdir / f"{name}.json"
-        blocks.save_document(doc, json_path)
-        html = blocks.render_document_html(doc)
-        text = blocks.render_document_text(doc)
-        (tdir / f"{name}.html").write_text(html, encoding="utf-8")
-        (tdir / f"{name}.txt").write_text(text, encoding="utf-8")
-        cfg.template.kind = "blocks"
-        cfg.template.blocks_path = str(json_path)
-        cfg.template.html_path = str(tdir / f"{name}.html")
-        cfg.template.text_path = str(tdir / f"{name}.txt")
-        cfg.template.subject = str(doc.get("subject") or cfg.template.subject)
-        cfg.template.footer.postal_address = (
-            f"{cfg.sender.from_name}, 1 Example Street, London, E1 6AN"
-        )
+        if not (starter == "keep" and initial):
+            doc = blocks.load_document(STARTERS / f"{starter}.json")
+            name = "promo" if starter != "personal_note" else "personal_note"
+            doc["name"] = doc.get("name") or name
+            tdir = base_dir / "templates"
+            tdir.mkdir(parents=True, exist_ok=True)
+            json_path = tdir / f"{name}.json"
+            blocks.save_document(doc, json_path)
+            html = blocks.render_document_html(doc)
+            text = blocks.render_document_text(doc)
+            (tdir / f"{name}.html").write_text(html, encoding="utf-8")
+            (tdir / f"{name}.txt").write_text(text, encoding="utf-8")
+            cfg.template.kind = "blocks"
+            cfg.template.blocks_path = str(json_path)
+            cfg.template.html_path = str(tdir / f"{name}.html")
+            cfg.template.text_path = str(tdir / f"{name}.txt")
+            cfg.template.subject = str(doc.get("subject") or cfg.template.subject)
+            cfg.template.footer.postal_address = (
+                f"{cfg.sender.from_name}, 1 Example Street, London, E1 6AN"
+            )
 
         cfg_path = base_dir / "campaign.yaml"
         cfg_path = write_config(cfg, cfg_path)

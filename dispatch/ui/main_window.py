@@ -789,7 +789,8 @@ class MainWindow(QMainWindow):
 
     def new_campaign(self) -> None:
         from .onboarding import OnboardingWizard
-        wizard = OnboardingWizard(initial_config=None, initial_path=None, parent=self)
+        wizard = OnboardingWizard(initial_config=self.cfg, initial_path=self.cfg_path,
+                                  parent=self)
         if wizard.exec() != OnboardingWizard.Accepted:
             return
         if wizard.config and wizard.config_path:
