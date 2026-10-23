@@ -1,6 +1,8 @@
 """First-run wizard: sheet -> provider/password -> template."""
 from __future__ import annotations
 
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -209,6 +211,29 @@ class TemplatePage(QWizardPage):
         return button.property("starter") if button else "personal_note"
 
 
+def backup_campaign(base_dir: Path) -> Path | None:
+    """Copy an existing campaign.yaml + templates aside before a new campaign replaces them.
+
+    New campaigns are written into the sheet's folder, which is also where the previous
+    campaign lives. Without this, "New campaign" would silently destroy the old one.
+    """
+    cfg_file = base_dir / "campaign.yaml"
+    if not cfg_file.exists():
+        return None
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = base_dir / f"campaign-backup-{stamp}"
+    suffix = 2
+    while dest.exists():
+        dest = base_dir / f"campaign-backup-{stamp}-{suffix}"
+        suffix += 1
+    dest.mkdir(parents=True)
+    shutil.copy2(cfg_file, dest / cfg_file.name)
+    templates = base_dir / "templates"
+    if templates.is_dir():
+        shutil.copytree(templates, dest / "templates")
+    return dest
+
+
 class OnboardingWizard(QWizard):
     def __init__(self, initial_config: FullConfig | None = None,
                  initial_path: Path | None = None, parent=None):
@@ -241,6 +266,7 @@ class OnboardingWizard(QWizard):
     def accept(self) -> None:  # noqa: D401
         sheet = Path(self.sheet_page.path_edit.text().strip()).expanduser().resolve()
         base_dir = sheet.parent
+        backup = backup_campaign(base_dir)
         cfg = default_config(base_dir)
         cfg.campaign.sheet_path = str(sheet)
         cfg.campaign.sheet_tab = None
@@ -297,6 +323,13 @@ class OnboardingWizard(QWizard):
 
         self.config = cfg
         self.config_path = cfg_path
+        if backup is not None:
+            QMessageBox.information(
+                self, "Previous campaign backed up",
+                f"An existing campaign in this folder was copied to:\n\n{backup}\n\n"
+                "It contains the old campaign.yaml and templates. The new campaign now "
+                "uses campaign.yaml alongside it.",
+            )
         super().accept()
 
     def reject(self) -> None:

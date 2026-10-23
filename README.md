@@ -177,6 +177,14 @@ Write-back is atomic: temp file in the same directory, then `os.replace()`. It r
 write while Excel's `~$<name>.xlsx` lock file exists. The workbook is rewritten on every
 10 sends, on pause, on stop and on exit — never during a read.
 
+### Switching campaigns
+
+**File → New campaign** and **File → Open campaign** re-import the workbook immediately, so
+the contact grid always shows the campaign you just opened. Saving Settings does the same.
+A new campaign is written as `campaign.yaml` in the sheet's folder; if one already exists
+there, the old `campaign.yaml` and `templates/` are first copied to
+`campaign-backup-<timestamp>/`, so the previous campaign is never silently replaced.
+
 ---
 
 ## Eligibility
@@ -284,7 +292,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 130 tests, no network
+pytest                                   # 133 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -340,7 +348,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             130 tests, .eml fixtures, offscreen UI smoke tests
+tests/             133 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

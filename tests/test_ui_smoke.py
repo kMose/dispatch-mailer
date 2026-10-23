@@ -10,9 +10,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QMessageBox  # noqa: E402
 
 from dispatch import db  # noqa: E402
-from dispatch.config import load_config  # noqa: E402
+from dispatch.config import load_config, write_config  # noqa: E402
 from dispatch.engine import preflight  # noqa: E402
 from dispatch.ui.main_window import MainWindow  # noqa: E402
+from dispatch.ui.onboarding import backup_campaign  # noqa: E402
 from dispatch.ui.preflight import PreflightDialog  # noqa: E402
 from dispatch.ui.settings import SettingsDialog  # noqa: E402
 from dispatch.ui.suppression import SuppressionDialog  # noqa: E402
@@ -77,6 +78,52 @@ def test_contact_search_filters_the_table(qtbot, campaign, contacts_12):
     win.search.clear()
     assert win.proxy.rowCount() == 12
     win.close()
+
+
+def test_switching_campaign_imports_the_new_sheet(qtbot, tmp_path):
+    from tests.conftest import make_config
+
+    one, two = tmp_path / "one", tmp_path / "two"
+    one.mkdir()
+    two.mkdir()
+    cfg1 = make_config(one, [{"email": "one@example.com"}], dry_run=True)
+    cfg2 = make_config(two, [{"email": "two@example.com"},
+                             {"email": "three@example.com"}], dry_run=True)
+    win = _window(qtbot, cfg1)
+    assert {row["email"] for row in win.model.rows} == {"one@example.com"}
+
+    assert win._switch_campaign(cfg2, None) is True
+    assert {row["email"] for row in win.model.rows} == {
+        "two@example.com", "three@example.com"}
+    win.close()
+
+
+def test_reload_config_picks_up_a_changed_workbook(qtbot, tmp_path, quiet_boxes):
+    from tests.conftest import make_config, write_workbook
+
+    cfg = make_config(tmp_path, [{"email": "old@example.com"}], dry_run=True)
+    cfg_path = write_config(cfg, tmp_path / "campaign.yaml")
+    win = _window(qtbot, cfg)
+    win.cfg_path = cfg_path
+    assert {row["email"] for row in win.model.rows} == {"old@example.com"}
+
+    write_workbook(tmp_path / "leads.xlsx", [{"email": "new@example.com"}])
+    win._reload_config()
+    assert {row["email"] for row in win.model.rows} == {"new@example.com"}
+    win.close()
+
+
+def test_backup_campaign_copies_config_and_templates(tmp_path):
+    (tmp_path / "campaign.yaml").write_text("campaign: {}\n", encoding="utf-8")
+    templates = tmp_path / "templates"
+    templates.mkdir()
+    (templates / "a.json").write_text("{}", encoding="utf-8")
+
+    dest = backup_campaign(tmp_path)
+    assert dest is not None and dest.is_dir()
+    assert (dest / "campaign.yaml").read_text(encoding="utf-8") == "campaign: {}\n"
+    assert (dest / "templates" / "a.json").exists()
+    assert backup_campaign(tmp_path / "empty") is None
 
 
 def test_settings_has_tabs_and_saves(qtbot, campaign, quiet_boxes):

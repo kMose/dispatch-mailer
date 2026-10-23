@@ -55,12 +55,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_menu()
         self._restore_geometry()
-        try:
-            preflight_mod.import_sheet(cfg, self.conn)
-        except Exception as exc:
-            self._log("error", f"cannot read the spreadsheet: {exc}")
-        self.reload_contacts()
-        self._refresh_stats()
+        self._reload_sheet()
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
@@ -726,18 +721,59 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 QMessageBox.warning(self, "Config error", str(exc))
                 return
-            self.dry_banner.setVisible(self.cfg.safety.dry_run)
-            self.title.setText(self.cfg.campaign.name)
-            self.setWindowTitle(f"Dispatch — {self.cfg.campaign.name}")
-            self.subtitle.setText(self.cfg.sender.from_email)
-            self.subtitle.setToolTip(f"{self.cfg.sender.from_email} — "
-                                     f"{Path(self.cfg.sheet_file).name}")
-            self.pacing_label2.setText(
-                f"Timer: {self.cfg.throttle.mode} · "
-                f"~{self.cfg.throttle.mean_seconds():.0f}s between sends")
-            self.statusBar().showMessage(f"{self.cfg_path}  ·  sheet: {self.cfg.sheet_file}")
-            self.reload_contacts()
-            self._refresh_stats()
+            self._apply_config_to_ui()
+            self._reload_sheet()
+
+    def _apply_config_to_ui(self) -> None:
+        self.dry_banner.setVisible(self.cfg.safety.dry_run)
+        self.title.setText(self.cfg.campaign.name)
+        self.setWindowTitle(f"Dispatch — {self.cfg.campaign.name}")
+        self.subtitle.setText(self.cfg.sender.from_email)
+        self.subtitle.setToolTip(f"{self.cfg.sender.from_email} — "
+                                 f"{Path(self.cfg.sheet_file).name}")
+        self.pacing_label2.setText(
+            f"Timer: {self.cfg.throttle.mode} · "
+            f"~{self.cfg.throttle.mean_seconds():.0f}s between sends")
+        self.statusBar().showMessage(f"{self.cfg_path}  ·  sheet: {self.cfg.sheet_file}")
+
+    def _reload_sheet(self) -> None:
+        """Import the campaign's workbook into SQLite and repaint the grid.
+
+        Switching campaigns must do this: the contacts table still holds the old sheet
+        until an import marks those rows out-of-sheet and inserts the new ones.
+        """
+        if self.worker and self.worker.is_alive():
+            return  # never re-import underneath a running sender
+        try:
+            data = preflight_mod.import_sheet(self.cfg, self.conn)
+        except Exception as exc:
+            self._log("error", f"cannot read {Path(self.cfg.sheet_file).name}: {exc}")
+        else:
+            self._log("info", f"imported {len(data.contacts)} row(s) from {data.path.name}")
+        self.reload_contacts()
+        self._refresh_stats()
+
+    def _switch_campaign(self, cfg: FullConfig, path: Path | None) -> bool:
+        if self.worker and self.worker.is_alive():
+            QMessageBox.warning(self, "A run is active", "Stop the current run first.")
+            return False
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        self.cfg = cfg
+        self.cfg_path = path
+        self.conn = db.connect(cfg.db_path)
+        db.init_db(self.conn)
+        # Filters from the previous campaign would hide the new contacts.
+        self.search.clear()
+        self.proxy.set_kind("all")
+        for button in self.chip_group.buttons():
+            if button.property("kind") == "all":
+                button.setChecked(True)
+        self._apply_config_to_ui()
+        self._reload_sheet()
+        return True
 
     def open_campaign(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Open campaign", str(Path.cwd()),
@@ -749,16 +785,7 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Cannot open", str(exc))
             return
-        if self.worker and self.worker.is_alive():
-            QMessageBox.warning(self, "A run is active", "Stop the current run first.")
-            return
-        self.conn.close()
-        self.cfg = cfg
-        self.cfg_path = Path(path)
-        self.conn = db.connect(cfg.db_path)
-        db.init_db(self.conn)
-        self.reload_contacts()
-        self._reload_config()
+        self._switch_campaign(cfg, Path(path))
 
     def new_campaign(self) -> None:
         from .onboarding import OnboardingWizard
@@ -766,13 +793,7 @@ class MainWindow(QMainWindow):
         if wizard.exec() != OnboardingWizard.Accepted:
             return
         if wizard.config and wizard.config_path:
-            self.conn.close()
-            self.cfg = wizard.config
-            self.cfg_path = wizard.config_path
-            self.conn = db.connect(self.cfg.db_path)
-            db.init_db(self.conn)
-            self.reload_contacts()
-            self._reload_config()
+            self._switch_campaign(wizard.config, wizard.config_path)
 
     def _auto_check_inbox(self) -> None:
         from ..mail.secrets import SecretNotFound, resolve_secret
