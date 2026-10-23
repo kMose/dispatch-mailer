@@ -241,6 +241,8 @@ Two kinds, both consumed by the engine as rendered artifacts:
 
 - **blocks** — edited in the builder; source of truth is `templates/<name>.json`. Saving
   regenerates `<name>.html` and `<name>.txt` and rewrites the paths in `campaign.yaml`.
+  **Open…** loads any block `.json` into the builder and makes it the campaign's active
+  template; **New…** starts from a built-in starter; **Save as…** writes a copy.
 - **raw** — a hand-written `.html`/`.txt` pair, opened read-only in the builder.
 
 Placeholders: any spreadsheet column by name, plus `{Email}`, `{UnsubscribeURL}`,
@@ -323,7 +325,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 135 tests, no network
+pytest                                   # 136 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -379,7 +381,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             135 tests, .eml fixtures, offscreen UI smoke tests
+tests/             136 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

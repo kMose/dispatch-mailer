@@ -178,6 +178,30 @@ def test_backup_campaign_copies_config_and_templates(tmp_path):
     assert backup_campaign(tmp_path / "empty") is None
 
 
+def test_template_builder_opens_another_template(qtbot, campaign, tmp_path, quiet_boxes):
+    from dispatch.mail import blocks
+    from tests.conftest import STARTERS
+
+    cfg = campaign([{"email": "a@example.com"}], dry_run=True)
+    path = tmp_path / "second.json"
+    doc = blocks.load_document(STARTERS / "personal_note.json")
+    doc["name"] = "Second"
+    doc["subject"] = "Second subject"
+    blocks.save_document(doc, path)
+
+    dialog = TemplateBuilderDialog(cfg, None)
+    qtbot.addWidget(dialog)
+    assert dialog._open_path(path) is True
+    assert dialog.name_edit.text() == "Second"
+    assert dialog.subject_edit.text() == "Second subject"
+    assert cfg.template.blocks_path == str(path)
+
+    dialog._save()
+    assert (tmp_path / "second.html").exists()
+    assert (tmp_path / "second.txt").exists()
+    dialog.close()
+
+
 def test_settings_has_tabs_and_saves(qtbot, campaign, quiet_boxes):
     cfg = campaign([{"email": "a@example.com"}], dry_run=True)
     dialog = SettingsDialog(cfg, cfg.config_path)

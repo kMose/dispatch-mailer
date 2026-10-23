@@ -218,6 +218,8 @@ class TemplateBuilderDialog(QDialog):
         bottom = QHBoxLayout()
         new_btn = QPushButton("New…")
         new_btn.clicked.connect(self._new_template)
+        open_btn = QPushButton("Open…")
+        open_btn.clicked.connect(self._open_template)
         validate_btn = QPushButton("Validate")
         validate_btn.clicked.connect(lambda: self._validate(show=True))
         test_btn = QPushButton("Send test to myself")
@@ -235,6 +237,7 @@ class TemplateBuilderDialog(QDialog):
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.reject)
         bottom.addWidget(new_btn)
+        bottom.addWidget(open_btn)
         bottom.addWidget(validate_btn)
         bottom.addStretch(1)
         bottom.addWidget(test_btn)
@@ -655,6 +658,41 @@ class TemplateBuilderDialog(QDialog):
         self._refresh_list()
         self._rebuild_editor()
         self._schedule_preview()
+
+    def _open_template(self) -> None:
+        start = str(self.cfg.blocks_file.parent) if self.cfg.template.blocks_path else str(Path.cwd())
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open template", start, "Block template (*.json)")
+        if path:
+            self._open_path(Path(path))
+
+    def _open_path(self, path: Path) -> bool:
+        """Load a block document and make it the campaign's active template."""
+        try:
+            doc = blocks.load_document(path)
+        except blocks.BlockError as exc:
+            QMessageBox.warning(self, "Cannot open template", str(exc))
+            return False
+        self.doc = doc
+        self.raw = False
+        self.current = 0 if doc.get("blocks") else -1
+        self.banner.hide()
+        self.raw_switch.hide()
+        self.name_edit.setText(doc.get("name", path.stem))
+        self.subject_edit.setText(doc.get("subject", ""))
+        self.preheader_edit.setText(doc.get("preheader", ""))
+        self._set_editing_enabled(True)
+        self._refresh_list()
+        self._rebuild_editor()
+        self._apply_to_config(path.with_suffix(""))
+        if self.cfg_path:
+            try:
+                write_config(self.cfg, self.cfg_path)
+            except Exception as exc:
+                QMessageBox.warning(self, "Config not updated", str(exc))
+        self._schedule_preview()
+        self.saved.emit()
+        return True
 
     def _switch_to_blocks(self) -> None:
         if QMessageBox.question(
