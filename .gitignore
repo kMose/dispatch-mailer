@@ -11,6 +11,8 @@ dispatch.sqlite3
 dispatch.sqlite3-wal
 dispatch.sqlite3-shm
 *.dispatch-backup.xlsx
+campaign-backup-*/
+campaign.yaml.bak*
 ~$*.xlsx
 .pytest_cache/
 .coverage
