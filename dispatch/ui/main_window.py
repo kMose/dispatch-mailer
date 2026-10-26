@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import queue
+import re
 import shutil
 import sqlite3
 import time
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import db
-from ..config import FullConfig, load_config, write_config
+from ..config import FullConfig, dump_config, load_config, write_config
 from ..engine import eligibility
 from ..engine import preflight as preflight_mod
 from ..engine.worker import Worker, mask_email
@@ -324,6 +325,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         self._action(file_menu, "Export run CSV…", self.export_run_csv)
         self._action(file_menu, "Write results to sheet…", self.write_results)
+        self._action(file_menu, "Export campaign.yaml…", self.export_campaign)
         file_menu.addSeparator()
         self._action(file_menu, "Quit", self.close, "Ctrl+Q")
 
@@ -793,6 +795,23 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.warning(self, "Cannot open", str(exc))
             return
+        if not cfg.sheet_file.exists():
+            QMessageBox.information(
+                self, "Lead sheet missing",
+                f"This campaign points at:\n{cfg.sheet_file}\n\nLocate the workbook to "
+                "finish opening it.")
+            sheet, _ = QFileDialog.getOpenFileName(
+                self, "Locate the lead sheet", str(Path(path).parent),
+                "Excel workbooks (*.xlsx *.xlsm)")
+            if not sheet:
+                return
+            cfg.campaign.sheet_path = str(Path(sheet).resolve())
+            cfg.campaign.sheet_tab = None
+            try:
+                write_config(cfg, path)
+            except Exception as exc:
+                QMessageBox.warning(self, "Cannot update campaign.yaml", str(exc))
+                return
         self._switch_campaign(cfg, Path(path))
 
     def new_campaign(self) -> None:
@@ -996,6 +1015,29 @@ class MainWindow(QMainWindow):
             "then either remove them from the sheet or set LastAdvertised by hand:\n\n"
             + "\n".join(lines),
         )
+
+    def export_campaign(self) -> None:
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", self.cfg.campaign.name or "campaign")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export campaign.yaml", f"{stem}.campaign.yaml",
+            "Campaign config (*.yaml *.yml)")
+        if not path:
+            return
+        if self._export_campaign_to(Path(path)):
+            QMessageBox.information(
+                self, "Configuration exported",
+                f"Saved to\n{path}\n\nThis contains settings only — the workbook, "
+                "templates and send database stay where they are.")
+
+    def _export_campaign_to(self, path: Path) -> bool:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(dump_config(self.cfg, absolute_paths=True), encoding="utf-8")
+        except Exception as exc:
+            QMessageBox.warning(self, "Export failed", str(exc))
+            return False
+        self._log("info", f"campaign configuration exported to {path}")
+        return True
 
     def export_run_csv(self) -> None:
         run = db.latest_run(self.conn)

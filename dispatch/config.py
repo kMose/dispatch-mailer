@@ -337,8 +337,17 @@ def load_config(path: str | Path) -> FullConfig:
     return cfg
 
 
-def dump_config(cfg: FullConfig) -> str:
+def dump_config(cfg: FullConfig, *, absolute_paths: bool = False) -> str:
     data = cfg.model_dump(mode="json", exclude_none=False)
+    if absolute_paths:
+        # An exported config must work from any folder; relative paths would resolve
+        # against the export location instead of the campaign that produced it.
+        data["campaign"]["sheet_path"] = str(cfg.sheet_file.resolve())
+        for key, value in (("html_path", cfg.template.html_path),
+                           ("text_path", cfg.template.text_path),
+                           ("blocks_path", cfg.template.blocks_path)):
+            if value:
+                data["template"][key] = str(cfg.resolve(value) or Path(value).resolve())
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 

@@ -388,6 +388,51 @@ def test_import_new_sheet_rejects_a_workbook_without_email(qtbot, tmp_path, quie
     win.close()
 
 
+def test_onboarding_restores_an_existing_campaign_yaml(qtbot, tmp_path, quiet_boxes):
+    from PySide6.QtWidgets import QWizard
+
+    from dispatch.ui.onboarding import OnboardingWizard
+    from tests.conftest import make_config
+
+    base = tmp_path / "campaign"
+    base.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}], dry_run=True)
+    cfg_path = write_config(cfg, base / "campaign.yaml")
+
+    wizard = OnboardingWizard()
+    qtbot.addWidget(wizard)
+    wizard.show()
+    assert wizard._restore_from(cfg_path) is True
+    assert wizard.config is not None
+    assert wizard.config.campaign.name == cfg.campaign.name
+    assert wizard.config_path == cfg_path
+    assert wizard.result() == QWizard.Accepted
+
+
+def test_config_export_uses_absolute_paths_and_reloads(qtbot, tmp_path, quiet_boxes):
+    from dispatch.config import dump_config
+    from tests.conftest import make_config
+
+    base = tmp_path / "campaign"
+    base.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}], dry_run=True)
+    exported = tmp_path / "elsewhere" / "exported.yaml"
+    exported.parent.mkdir()
+
+    exported.write_text(dump_config(cfg, absolute_paths=True), encoding="utf-8")
+    loaded = load_config(exported)
+    assert loaded.sheet_file == cfg.sheet_file.resolve()
+    assert loaded.campaign.name == cfg.campaign.name
+    assert loaded.html_file.exists()
+
+    win = MainWindow(cfg, cfg.config_path)
+    qtbot.addWidget(win)
+    target = tmp_path / "from_window.yaml"
+    assert win._export_campaign_to(target) is True
+    assert load_config(target).sheet_file == cfg.sheet_file.resolve()
+    win.close()
+
+
 def test_settings_has_tabs_and_saves(qtbot, campaign, quiet_boxes):
     cfg = campaign([{"email": "a@example.com"}], dry_run=True)
     dialog = SettingsDialog(cfg, cfg.config_path)

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QPushButton, QRadioButton, QVBoxLayout, QWidget, QWizard, QWizardPage,
 )
 
-from ..config import FullConfig, default_config, write_config
+from ..config import FullConfig, default_config, load_config, write_config
 from ..mail import blocks
 from ..mail.secrets import store_secret
 from ..sheet.reader import SheetError, read_sheet
@@ -74,6 +74,16 @@ class SheetPage(QWizardPage):
         self.info.setObjectName("Muted")
         self.info.setWordWrap(True)
         layout.addWidget(self.info)
+        restore_row = QHBoxLayout()
+        restore_label = QLabel("Already have a campaign.yaml?")
+        restore_label.setObjectName("Muted")
+        restore = QPushButton("Restore campaign…")
+        restore.setToolTip("Load an existing campaign.yaml and reconnect it to its workbook")
+        restore.clicked.connect(self.wizard_ref.restore_campaign_dialog)
+        restore_row.addWidget(restore_label)
+        restore_row.addWidget(restore)
+        restore_row.addStretch(1)
+        layout.addLayout(restore_row)
         layout.addStretch(1)
         wrap = QVBoxLayout()
         wrap.addStretch(1)
@@ -284,6 +294,55 @@ class OnboardingWizard(QWizard):
                 self.sender_page.password.setPlaceholderText(
                     "Leave blank to keep the saved password")
         self.sheet_page._validate()
+
+    def restore_campaign_dialog(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Restore campaign", str(Path.home()),
+            "Campaign config (*.yaml *.yml)")
+        if path:
+            self._restore_from(Path(path))
+
+    def _restore_from(self, path: Path) -> bool:
+        """Load an existing campaign.yaml and close the wizard with it.
+
+        If the workbook has moved, ask for its new location and persist that path. The
+        sender, template, quota, warm-up and suppression settings are kept exactly.
+        """
+        try:
+            cfg = load_config(path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Cannot restore campaign", str(exc))
+            return False
+        if not cfg.sheet_file.exists():
+            QMessageBox.information(
+                self, "Lead sheet missing",
+                f"The campaign points at:\n{cfg.sheet_file}\n\n"
+                "Choose its new location to finish restoring.")
+            sheet, _ = QFileDialog.getOpenFileName(
+                self, "Locate the lead sheet for this campaign", str(path.parent),
+                "Excel workbooks (*.xlsx *.xlsm)")
+            if not sheet:
+                return False
+            cfg.campaign.sheet_path = str(Path(sheet).resolve())
+            cfg.campaign.sheet_tab = None
+            try:
+                write_config(cfg, path)
+            except Exception as exc:
+                QMessageBox.warning(self, "Cannot update campaign.yaml", str(exc))
+                return False
+        missing = [str(p) for p in (cfg.html_file, cfg.text_file,
+                                    cfg.blocks_file if cfg.template_kind() == "blocks" else None)
+                   if p is not None and not Path(p).exists()]
+        if missing:
+            QMessageBox.warning(
+                self, "Campaign restored, files missing",
+                "The campaign loaded, but these template files were not found:\n\n"
+                + "\n".join(missing)
+                + "\n\nOpen the template builder and save before sending.")
+        self.config = cfg
+        self.config_path = Path(path)
+        self.done(QWizard.Accepted)
+        return True
 
     def accept(self) -> None:  # noqa: D401
         sheet = Path(self.sheet_page.path_edit.text().strip()).expanduser().resolve()

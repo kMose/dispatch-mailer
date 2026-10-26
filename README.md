@@ -237,6 +237,18 @@ Campaign → *Campaign name*). The name is cosmetic; it appears in the window ti
 bar. If the name was auto-generated from the old sheet's filename, importing a new sheet
 updates it automatically; a hand-written name is left alone.
 
+### Restoring a campaign
+
+If `campaign.yaml` survives but the app has lost track of it, the first-run wizard's
+**Restore campaign…** button loads it directly: sender, template, quota, warm-up, caps and
+suppression settings come back, and the wizard closes. If the workbook has moved, you are
+asked for its new location and the path is written back into the YAML. **File → Open
+campaign…** does the same relink when a configured workbook is missing.
+
+**File → Export campaign.yaml…** writes a copy with **absolute** sheet/template paths, so it
+can be restored from any folder. It is a settings export only — the workbook, templates and
+`dispatch.sqlite3` history are not embedded.
+
 **File → Import new lead sheet…** (`Ctrl+Shift+I`) replaces the workbook inside the current
 campaign. It keeps the sender account, template, suppression list, warm-up clock and all
 send history; only the lead source changes. If the workbook has several tabs, you choose
@@ -386,7 +398,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 171 tests, no network
+pytest                                   # 173 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -442,7 +454,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             171 tests, .eml fixtures, offscreen UI smoke tests
+tests/             173 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 
