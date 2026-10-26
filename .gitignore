@@ -11,6 +11,10 @@ dispatch.sqlite3
 dispatch.sqlite3-wal
 dispatch.sqlite3-shm
 *.dispatch-backup.xlsx
+# live lead data — only the bundled sample is tracked
+*.xlsx
+!sample_leads.xlsx
+*.csv
 campaign-backup-*/
 campaign.yaml.bak*
 .history/
