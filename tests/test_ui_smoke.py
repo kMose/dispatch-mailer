@@ -298,6 +298,58 @@ def test_builder_renders_html_and_builds_a_bcc_test_message(qtbot, campaign, qui
     dialog.close()
 
 
+def test_import_new_sheet_keeps_the_campaign_and_history(qtbot, tmp_path, quiet_boxes):
+    from tests.conftest import HEADERS, make_config, write_workbook
+
+    base = tmp_path / "campaign"
+    base.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}, {"email": "b@example.com"}],
+                      dry_run=True)
+    cfg_path = write_config(cfg, base / "campaign.yaml")
+    win = MainWindow(cfg, cfg_path)
+    qtbot.addWidget(win)
+    win.show()
+    qtbot.wait(50)
+
+    before = db.contact_by_email(win.conn, "b@example.com")["id"]
+    new_sheet = write_workbook(
+        tmp_path / "second.xlsx",
+        [{"email": "b@example.com"}, {"email": "c@example.com"},
+         {"email": "d@example.com"}],
+        headers=HEADERS)
+    old_sheet = cfg.sheet_file
+
+    assert win._apply_sheet_import(new_sheet, "Leads") is True
+    assert cfg.sheet_file == new_sheet.resolve()
+    assert {row["email"] for row in win.model.rows} == {
+        "b@example.com", "c@example.com", "d@example.com"}
+    assert win.conn.execute(
+        "SELECT COUNT(*) FROM contacts WHERE in_sheet=1").fetchone()[0] == 3
+    assert db.contact_by_email(win.conn, "b@example.com")["id"] == before
+    assert old_sheet.exists()
+    assert list(base.glob("campaign.yaml.bak-*"))
+    win.close()
+
+
+def test_import_new_sheet_rejects_a_workbook_without_email(qtbot, tmp_path, quiet_boxes):
+    from tests.conftest import make_config, write_workbook
+
+    base = tmp_path / "campaign"
+    base.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}], dry_run=True)
+    win = MainWindow(cfg, None)
+    qtbot.addWidget(win)
+    win.show()
+    qtbot.wait(30)
+
+    bad = write_workbook(tmp_path / "bad.xlsx", [{"x": "value"}],
+                         headers=["Name", "Notes"])
+    original = cfg.campaign.sheet_path
+    assert win._apply_sheet_import(bad, "Leads") is False
+    assert cfg.campaign.sheet_path == original
+    win.close()
+
+
 def test_settings_has_tabs_and_saves(qtbot, campaign, quiet_boxes):
     cfg = campaign([{"email": "a@example.com"}], dry_run=True)
     dialog = SettingsDialog(cfg, cfg.config_path)

@@ -228,6 +228,15 @@ A new campaign is written as `campaign.yaml` in the sheet's folder; if one alrea
 there, the old `campaign.yaml` and `templates/` are first copied to
 `campaign-backup-<timestamp>/`, so the previous campaign is never silently replaced.
 
+**File → Import new lead sheet…** (`Ctrl+Shift+I`) replaces the workbook inside the current
+campaign. It keeps the sender account, template, suppression list, warm-up clock and all
+send history; only the lead source changes. If the workbook has several tabs, you choose
+one. Before anything changes you see the new row count and how many addresses overlap;
+`campaign.yaml` is copied to `campaign.yaml.bak-<timestamp>` first. Contacts no longer in
+the sheet are hidden, not deleted, and overlapping contacts keep their `LastAdvertised`,
+replies and suppressions. Future write-back goes to the new workbook; the old one is never
+modified. The import is refused while a run is active.
+
 ---
 
 ## Eligibility
@@ -368,7 +377,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 164 tests, no network
+pytest                                   # 166 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -424,7 +433,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             164 tests, .eml fixtures, offscreen UI smoke tests
+tests/             166 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import queue
+import shutil
 import sqlite3
 import time
 from datetime import date, datetime
@@ -12,16 +13,17 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QDialog, QFileDialog, QFrame,
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QPlainTextEdit, QProgressBar, QPushButton, QSplitter, QTableView, QVBoxLayout,
-    QWidget,
+    QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QMainWindow,
+    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QSplitter, QTableView,
+    QVBoxLayout, QWidget,
 )
 
 from .. import db
-from ..config import FullConfig, load_config
+from ..config import FullConfig, load_config, write_config
 from ..engine import eligibility
 from ..engine import preflight as preflight_mod
 from ..engine.worker import Worker, mask_email
+from ..sheet.reader import read_sheet
 from .inbox import InboxCheckThread
 from .models import ContactFilterProxy, ContactTableModel
 from .preflight import PreflightDialog
@@ -317,6 +319,8 @@ class MainWindow(QMainWindow):
         file_menu = menu.addMenu("&File")
         self._action(file_menu, "Open campaign…", self.open_campaign, "Ctrl+O")
         self._action(file_menu, "New campaign…", self.new_campaign)
+        self._action(file_menu, "Import new lead sheet…", self.import_new_sheet,
+                     "Ctrl+Shift+I")
         file_menu.addSeparator()
         self._action(file_menu, "Export run CSV…", self.export_run_csv)
         self._action(file_menu, "Write results to sheet…", self.write_results)
@@ -798,6 +802,118 @@ class MainWindow(QMainWindow):
             return
         if wizard.config and wizard.config_path:
             self._switch_campaign(wizard.config, wizard.config_path)
+
+    def import_new_sheet(self) -> None:
+        """Replace the campaign's workbook without touching account/template/history."""
+        if self.worker and self.worker.is_alive():
+            QMessageBox.warning(self, "A run is active", "Stop the current run first.")
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import new lead sheet", str(self.cfg.sheet_file.parent),
+            "Excel workbook (*.xlsx *.xlsm)")
+        if not path:
+            return
+        book = Path(path).resolve()
+        try:
+            from openpyxl import load_workbook
+            workbook = load_workbook(book, read_only=True, data_only=True)
+            names = list(workbook.sheetnames)
+            active = workbook.active.title if workbook.active else names[0]
+            workbook.close()
+        except Exception as exc:
+            QMessageBox.critical(self, "Cannot open workbook", str(exc))
+            return
+        if not names:
+            QMessageBox.warning(self, "No worksheets", "That workbook has no sheets.")
+            return
+        tab = names[0]
+        if len(names) > 1:
+            tab, ok = QInputDialog.getItem(
+                self, "Choose worksheet", "Which sheet holds the leads?",
+                names, names.index(active) if active in names else 0, False)
+            if not ok:
+                return
+        try:
+            data = read_sheet(book, tab, self.cfg.campaign.date_order)
+        except Exception as exc:
+            QMessageBox.critical(self, "Cannot read sheet", str(exc))
+            return
+        if not data.contacts:
+            QMessageBox.warning(self, "Empty sheet",
+                                f"{tab} has a header row but no data rows.")
+            return
+
+        existing = {row["email_norm"] for row in
+                    self.conn.execute("SELECT email_norm FROM contacts")}
+        incoming = {eligibility.normalize_email(c.email) for c in data.contacts if c.email}
+        overlap = len(existing & incoming)
+        current = self.conn.execute(
+            "SELECT COUNT(*) FROM contacts WHERE in_sheet=1").fetchone()[0]
+        summary = (
+            f"Switch this campaign to the new lead sheet?\n\n"
+            f"New: {book.name} — {len(data.contacts)} rows, sheet “{tab}”\n"
+            f"Current: {self.cfg.sheet_file.name} — {current} contacts\n"
+            f"{overlap} of the new addresses already exist in this campaign.\n\n"
+            "The sender account, template, warm-up clock and send history stay. "
+            "Contacts missing from the new sheet are hidden but kept; existing contacts "
+            "keep their send dates, replies and suppressions. Future write-back goes to "
+            f"{book.name}; the old workbook is left untouched."
+        )
+        if QMessageBox.question(self, "Import lead sheet?", summary,
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) != QMessageBox.Yes:
+            return
+        if self._apply_sheet_import(book, tab):
+            QMessageBox.information(
+                self, "Lead sheet imported",
+                f"{len(data.contacts)} rows imported from {book.name}.\n"
+                f"{overlap} existing contact(s) kept their history.")
+
+    def _apply_sheet_import(self, path: Path, tab: str) -> bool:
+        """Point the campaign at `path`, re-import it, and repaint. No dialogs."""
+        if self.worker and self.worker.is_alive():
+            QMessageBox.warning(self, "A run is active", "Stop the current run first.")
+            return False
+        try:
+            data = read_sheet(path, tab, self.cfg.campaign.date_order)
+        except Exception as exc:
+            self._log("error", f"cannot read {path.name}: {exc}")
+            return False
+        if not data.contacts:
+            self._log("error", f"{path.name} has no data rows")
+            return False
+
+        old_path, old_tab = self.cfg.campaign.sheet_path, self.cfg.campaign.sheet_tab
+        backup = None
+        if self.cfg_path and self.cfg_path.exists():
+            backup = self.cfg_path.with_name(
+                f"{self.cfg_path.stem}.yaml.bak-{datetime.now():%Y%m%d-%H%M%S}")
+            try:
+                shutil.copy2(self.cfg_path, backup)
+            except OSError:
+                backup = None
+        self.cfg.campaign.sheet_path = str(path.resolve())
+        self.cfg.campaign.sheet_tab = tab
+        try:
+            if self.cfg_path:
+                write_config(self.cfg, self.cfg_path)
+        except Exception as exc:
+            self.cfg.campaign.sheet_path, self.cfg.campaign.sheet_tab = old_path, old_tab
+            self._log("error", f"could not update campaign.yaml: {exc}")
+            return False
+
+        self.search.clear()
+        self.proxy.set_kind("all")
+        for button in self.chip_group.buttons():
+            if button.property("kind") == "all":
+                button.setChecked(True)
+        self._reload_sheet()
+        self._apply_config_to_ui()
+        self._log("info", f"lead sheet switched to {path.name} "
+                          f"({len(data.contacts)} rows, tab “{tab}”)")
+        if backup is not None:
+            self._log("info", f"previous campaign.yaml backed up to {backup.name}")
+        return True
 
     def _auto_check_inbox(self) -> None:
         from ..mail.secrets import SecretNotFound, resolve_secret
