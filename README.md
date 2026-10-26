@@ -211,6 +211,11 @@ zero-width characters are dropped. That applies to names, company, salutation an
 extra column, so `{FirstName}` cannot render as `John   ` and greetings do not acquire a
 phantom gap. The workbook itself is never rewritten merely by importing it.
 
+**ALL-CAPS names are title-cased** (`MR. JOHNATHAN YATES` → `Mr. Johnathan Yates`), with
+handling for `McDonald`, `MacDonald`, `O'Neil`, `Smith-Jones` and name columns such as
+`FullName`/`Name`. Names that already contain lower-case letters are left exactly as
+written, and `Company` is never re-cased because acronyms such as `IBM` would be damaged.
+
 Write-back is atomic: temp file in the same directory, then `os.replace()`. It refuses to
 write while Excel's `~$<name>.xlsx` lock file exists. The workbook is rewritten on every
 10 sends, on pause, on stop and on exit — never during a read.
@@ -363,7 +368,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 161 tests, no network
+pytest                                   # 164 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -419,7 +424,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             161 tests, .eml fixtures, offscreen UI smoke tests
+tests/             164 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dispatch import db
 from dispatch.engine import preflight
 from dispatch.mail import blocks, compose
-from dispatch.sheet.reader import normalize_salutation, read_sheet
+from dispatch.sheet.reader import normalize_salutation, read_sheet, smart_name_case
 
 
 def test_salutation_header_is_cleaned_and_canonicalised(tmp_path):
@@ -36,6 +36,48 @@ def test_honorific_header_maps_to_salutation(tmp_path):
     )
     contact = read_sheet(path).contacts[0]
     assert contact.extra["Salutation"] == "Dr."
+
+
+def test_all_caps_names_are_title_cased(tmp_path):
+    from tests.conftest import write_workbook
+
+    path = write_workbook(
+        tmp_path / "leads.xlsx",
+        [{"email": "a@example.com", "Salutation": "MR.", "first_name": "JOHNATHAN",
+          "last_name": "YATES"}],
+        headers=["Salutation", "FirstName", "LastName", "Email"],
+    )
+    contact = read_sheet(path).contacts[0]
+
+    assert contact.extra["Salutation"] == "Mr."
+    assert contact.first_name == "Johnathan"
+    assert contact.last_name == "Yates"
+    assert contact.full_name == "Johnathan Yates"
+
+
+def test_smart_name_case_handles_mc_o_and_hyphens():
+    assert smart_name_case("MCDONALD") == "McDonald"
+    assert smart_name_case("MACDONALD") == "MacDonald"
+    assert smart_name_case("O'NEIL") == "O'Neil"
+    assert smart_name_case("O’CONNOR") == "O’Connor"
+    assert smart_name_case("SMITH-JONES") == "Smith-Jones"
+    assert smart_name_case("DE LA CRUZ") == "De La Cruz"
+    # Already-correct mixed case must be left alone.
+    assert smart_name_case("Johnathan") == "Johnathan"
+    assert smart_name_case("macDonald") == "macDonald"
+    assert smart_name_case("") == ""
+
+
+def test_all_caps_full_name_extra_is_title_cased(tmp_path):
+    from tests.conftest import write_workbook
+
+    path = write_workbook(
+        tmp_path / "leads.xlsx",
+        [{"email": "a@example.com", "FullName": "MR. JOHNATHAN YATES"}],
+        headers=["FullName", "Email"],
+    )
+    contact = read_sheet(path).contacts[0]
+    assert contact.extra["FullName"] == "Mr. Johnathan Yates"
 
 
 def test_normalize_salutation_variants():

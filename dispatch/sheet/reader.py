@@ -307,6 +307,8 @@ def read_sheet(path: str | Path, tab: str | None = None,
                 elif not _blank(raw):
                     if norm_header(header) in SALUTATION_HEADERS:
                         extra["Salutation"] = normalize_salutation(raw)
+                    elif norm_header(header) in _NAME_HEADERS:
+                        extra[header or f"Column{idx}"] = smart_name_case(raw)
                     else:
                         extra[header or f"Column{idx}"] = _raw_text(raw)
 
@@ -334,8 +336,8 @@ def read_sheet(path: str | Path, tab: str | None = None,
 
             contact = Contact(
                 email=email,
-                first_name=_raw_text(values.get("first_name")) or None,
-                last_name=_raw_text(values.get("last_name")) or None,
+                first_name=smart_name_case(values.get("first_name")) or None,
+                last_name=smart_name_case(values.get("last_name")) or None,
                 company=_raw_text(values.get("company")) or None,
                 last_advertised=parsed_dates.get("last_advertised"),
                 last_contacted=parsed_dates.get("last_contacted"),
@@ -426,3 +428,32 @@ def normalize_salutation(value: Any) -> str:
     text = _raw_text(value)
     key = text.rstrip(".").strip().lower()
     return _SALUTATION_CANON.get(key, text)
+
+
+_NAME_HEADERS = {"fullname", "name", "contactname", "firstname", "givenname",
+                 "lastname", "surname", "familyname"}
+
+
+def smart_name_case(value: Any) -> str:
+    """Title-case an ALL-CAPS name without mangling McDonald, O'Neil or Smith-Jones.
+
+    Values that already contain lower-case letters are returned untouched, so a correctly
+    entered `Johnathan` or `MacDonald` is never re-cased.
+    """
+    text = _raw_text(value)
+    letters = [char for char in text if char.isalpha()]
+    if len(letters) < 2 or not all(char.isupper() for char in letters):
+        return text
+
+    def cap(match: re.Match) -> str:
+        word = match.group(0)
+        if "'" in word or "’" in word:
+            head, tail = re.split(r"['’]", word, maxsplit=1)
+            return head.capitalize() + word[len(head)] + tail.capitalize()
+        if word.startswith("MC") and len(word) > 3:
+            return "Mc" + word[2:].capitalize()
+        if word.startswith("MAC") and len(word) > 4:
+            return "Mac" + word[3:].capitalize()
+        return word.capitalize()
+
+    return re.sub(r"[^\W\d_]+(?:['’][^\W\d_]+)*", cap, text)
