@@ -331,6 +331,44 @@ def test_import_new_sheet_keeps_the_campaign_and_history(qtbot, tmp_path, quiet_
     win.close()
 
 
+def test_rename_campaign_updates_title_and_config(qtbot, tmp_path, quiet_boxes):
+    from tests.conftest import make_config
+
+    base = tmp_path / "campaign"
+    base.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}], dry_run=True)
+    cfg_path = write_config(cfg, base / "campaign.yaml")
+    win = MainWindow(cfg, cfg_path)
+    qtbot.addWidget(win)
+    win.show()
+    qtbot.wait(30)
+
+    assert win._set_campaign_name("  Samlax Schools  ") is True
+    assert cfg.campaign.name == "Samlax Schools"
+    assert "Samlax Schools" in win.title.text()
+    assert load_config(cfg_path).campaign.name == "Samlax Schools"
+    win.close()
+
+
+def test_import_new_sheet_follows_a_sheet_derived_name(qtbot, tmp_path, quiet_boxes):
+    from tests.conftest import HEADERS, make_config, write_workbook
+
+    base = tmp_path / "campaign"
+    base.mkdir()
+    cfg = make_config(base, [{"email": "a@example.com"}], dry_run=True)
+    cfg.campaign.name = cfg.sheet_file.stem  # name came from the old sheet
+    win = MainWindow(cfg, None)
+    qtbot.addWidget(win)
+    win.show()
+    qtbot.wait(30)
+
+    new_sheet = write_workbook(tmp_path / "NewLeads.xlsx",
+                               [{"email": "b@example.com"}], headers=HEADERS)
+    assert win._apply_sheet_import(new_sheet, "Leads") is True
+    assert cfg.campaign.name == "NewLeads"
+    win.close()
+
+
 def test_import_new_sheet_rejects_a_workbook_without_email(qtbot, tmp_path, quiet_boxes):
     from tests.conftest import make_config, write_workbook
 

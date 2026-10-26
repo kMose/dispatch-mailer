@@ -328,6 +328,7 @@ class MainWindow(QMainWindow):
         self._action(file_menu, "Quit", self.close, "Ctrl+Q")
 
         campaign = menu.addMenu("&Campaign")
+        self._action(campaign, "Rename campaign…", self.rename_campaign)
         self._action(campaign, "Pre-flight report…", self.show_preflight, "Ctrl+P")
         self._action(campaign, "Start", self.start_campaign, "Ctrl+Return")
         self._action(campaign, "Pause / resume", self.toggle_pause, "Space")
@@ -803,6 +804,29 @@ class MainWindow(QMainWindow):
         if wizard.config and wizard.config_path:
             self._switch_campaign(wizard.config, wizard.config_path)
 
+    def rename_campaign(self) -> None:
+        name, ok = QInputDialog.getText(self, "Rename campaign", "Campaign name:",
+                                        text=self.cfg.campaign.name)
+        if ok:
+            self._set_campaign_name(name)
+
+    def _set_campaign_name(self, name: str) -> bool:
+        name = name.strip()
+        if not name or name == self.cfg.campaign.name:
+            return False
+        old = self.cfg.campaign.name
+        self.cfg.campaign.name = name
+        try:
+            if self.cfg_path:
+                write_config(self.cfg, self.cfg_path)
+        except Exception as exc:
+            self.cfg.campaign.name = old
+            QMessageBox.warning(self, "Rename failed", str(exc))
+            return False
+        self._apply_config_to_ui()
+        self._log("info", f"campaign renamed to “{name}”")
+        return True
+
     def import_new_sheet(self) -> None:
         """Replace the campaign's workbook without touching account/template/history."""
         if self.worker and self.worker.is_alive():
@@ -884,6 +908,10 @@ class MainWindow(QMainWindow):
             return False
 
         old_path, old_tab = self.cfg.campaign.sheet_path, self.cfg.campaign.sheet_tab
+        old_name = self.cfg.campaign.name
+        # If the name was auto-generated from the old file (the common case), follow the
+        # new workbook; a hand-written campaign name is left alone.
+        auto_name = bool(old_path) and self.cfg.campaign.name.strip() == Path(old_path).stem
         backup = None
         if self.cfg_path and self.cfg_path.exists():
             backup = self.cfg_path.with_name(
@@ -894,11 +922,14 @@ class MainWindow(QMainWindow):
                 backup = None
         self.cfg.campaign.sheet_path = str(path.resolve())
         self.cfg.campaign.sheet_tab = tab
+        if auto_name:
+            self.cfg.campaign.name = path.stem
         try:
             if self.cfg_path:
                 write_config(self.cfg, self.cfg_path)
         except Exception as exc:
             self.cfg.campaign.sheet_path, self.cfg.campaign.sheet_tab = old_path, old_tab
+            self.cfg.campaign.name = old_name
             self._log("error", f"could not update campaign.yaml: {exc}")
             return False
 

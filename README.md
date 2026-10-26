@@ -232,6 +232,11 @@ A new campaign is written as `campaign.yaml` in the sheet's folder; if one alrea
 there, the old `campaign.yaml` and `templates/` are first copied to
 `campaign-backup-<timestamp>/`, so the previous campaign is never silently replaced.
 
+Rename the campaign at any time with **Campaign → Rename campaign…** (or Settings →
+Campaign → *Campaign name*). The name is cosmetic; it appears in the window title and status
+bar. If the name was auto-generated from the old sheet's filename, importing a new sheet
+updates it automatically; a hand-written name is left alone.
+
 **File → Import new lead sheet…** (`Ctrl+Shift+I`) replaces the workbook inside the current
 campaign. It keeps the sender account, template, suppression list, warm-up clock and all
 send history; only the lead source changes. If the workbook has several tabs, you choose
@@ -381,7 +386,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 169 tests, no network
+pytest                                   # 171 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -437,7 +442,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             169 tests, .eml fixtures, offscreen UI smoke tests
+tests/             171 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 
