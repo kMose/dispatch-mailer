@@ -219,30 +219,20 @@ FOOTER_STYLE = (
 
 
 def footer_html(cfg, email: str) -> str:
-    token = unsubscribe_token(cfg, email)
-    url = unsubscribe_url(cfg, email, token)
     postal = html_mod.escape(cfg.template.footer.postal_address or "", quote=True)
-    mailto = cfg.template.footer.unsubscribe_mailto or ""
     parts = [
         f'<div style="{FOOTER_STYLE}">',
         f'<p style="margin:0 0 6px 0;">{postal}</p>' if postal else "",
-        (f'<p style="margin:0;">You received this because you are on the '
-         f'{html_mod.escape(cfg.campaign.name, quote=True)} list. '
-         f'<a href="{html_mod.escape(url, quote=True)}" '
-         f'style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>'
-         + (f' or reply to <a href="mailto:{html_mod.escape(mailto, quote=True)}" '
-            f'style="color:#6b7280;text-decoration:underline;">{html_mod.escape(mailto, quote=True)}</a>'
-            if mailto else "")
-         + ".</p>"),
+        '<p style="margin:0;">Reply STOP to unsubscribe.</p>',
         "</div>",
     ]
     return "".join(parts)
 
 
 def footer_text(cfg, email: str) -> str:
-    url = unsubscribe_url(cfg, email)
     postal = cfg.template.footer.postal_address
-    return (f"\n\n--\n{postal}\nUnsubscribe: {url}\n")
+    head = f"\n\n--\n{postal}\n" if postal else "\n\n--\n"
+    return f"{head}Reply STOP to unsubscribe.\n"
 
 
 def render_subject(cfg, values: Mapping[str, Any], subject: str | None = None) -> str:

@@ -140,7 +140,7 @@ Paths are resolved relative to the config file.
 
 | Key | Meaning |
 |---|---|
-| `campaign.name` | Shown in the UI and the unsubscribe footer |
+| `campaign.name` | Shown in the window title and status bar |
 | `campaign.sheet_path` / `sheet_tab` | Workbook and optional tab (`null` = active) |
 | `campaign.date_order` | `DMY`, `MDY` or `ISO` (see *Dates* below) |
 | `campaign.quota` | Maximum sends in one run |
@@ -289,8 +289,11 @@ Generated HTML is a single-column table layout with inline styles only — no fl
 `border="0"` and `display:block`; buttons are bulletproof table-cell links. The plain-text
 part is derived from the HTML, converts links to `label (url)` and wraps at 72 characters.
 
-The program appends the compliance footer and sets `List-Unsubscribe` and
-`List-Unsubscribe-Post: List-Unsubscribe=One-Click` on every message.
+The program appends a short compliance footer — the postal address plus
+**“Reply STOP to unsubscribe.”** — and still sets `List-Unsubscribe` and
+`List-Unsubscribe-Post: List-Unsubscribe=One-Click` on every message. An exact STOP reply
+is suppressed immediately (recorded as `replied STOP`); other opt-out wording still goes
+to the review queue for approval.
 
 ---
 
@@ -310,7 +313,8 @@ address to `suppression` as `hard_bounce`, and never tries it again. Fix the add
 the sheet and remove it from the suppression list if it was a mistake
 Open **Tools → Suppression & review…** (also in Settings), select the address and choose
 *Remove selected*. The same screen lets you add an address manually, export the list, and
-approve opt-out replies.
+review opt-out replies. A reply that is just `STOP` is suppressed automatically; other
+opt-out wording waits for approval.
 
 **`421 4.7.28` / “quota exceeded” / “rate limit”**
 The account is sending too fast or too much. Dispatch suspends the account for **10
@@ -359,7 +363,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 159 tests, no network
+pytest                                   # 161 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -415,7 +419,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             159 tests, .eml fixtures, offscreen UI smoke tests
+tests/             161 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 
@@ -467,7 +471,8 @@ a literal reading, the reason.
     local UTC offset, so hourly caps and the window are computed in local time.
 16. **Suppression has a dedicated screen** (Tools → Suppression & review…), with the
     review queue next to it: remove a mistaken hard bounce, add an address manually,
-    approve an opt-out, export the list. Hard bounces are still added automatically.
+    review an opt-out, export the list. Hard bounces and explicit STOP replies are added
+    automatically; softer opt-out phrases wait for approval.
 17. **Pause during a window wait** is honoured at the next loop iteration; pause does not
     freeze the wall clock.
 18. **The frozen app is onedir** (faster start, easier to inspect) rather than onefile.

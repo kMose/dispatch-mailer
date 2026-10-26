@@ -74,13 +74,39 @@ def test_quoted_footer_does_not_look_like_an_opt_out(campaign):
            b"Thanks, that sounds good.\n\n"
            b"On Mon, 19 Oct 2026 at 10:00, Sam <sam@samlax.net> wrote:\n"
            b"> Samlax, 1 Test Street, London\n"
-           b"> Unsubscribe: https://samlax.net/u/3e6436b5400e2c5a\n")
+           b"> Reply STOP to unsubscribe.\n")
     events = monitor.parse_message(raw)
     assert events[0].kind == "reply"
     monitor.apply_message(conn, events[0], "sam")
     assert not db.review_items(conn)
     assert db.contact_by_id(conn, contact_id)["replied"] == 1
     conn.close()
+
+
+def test_stop_reply_is_suppressed_immediately(campaign):
+    cfg = campaign([{"email": "dave@example.com", "first_name": "Dave"}])
+    conn, _ = sent_contact(cfg, "dave@example.com", "<send-dave-001@samlax.net>")
+    raw = (b"From: Dave <dave@example.com>\nTo: sam@samlax.net\n"
+           b"Subject: Re: Quick question\n"
+           b"In-Reply-To: <send-dave-001@samlax.net>\n"
+           b"Content-Type: text/plain; charset=UTF-8\n\nSTOP\n")
+
+    events = monitor.parse_message(raw)
+    assert events[0].kind == "optout"
+    assert events[0].stop_command is True
+    assert monitor.apply_message(conn, events[0], "sam") == "optout"
+
+    assert "dave@example.com" in db.suppression_set(conn)
+    assert not db.review_items(conn)  # no approval needed for an explicit STOP
+    conn.close()
+
+
+def test_stop_inside_a_normal_sentence_is_not_an_opt_out(campaign):
+    events = monitor.parse_message(
+        b"From: Dave <dave@example.com>\nSubject: Re: Quick question\n"
+        b"Content-Type: text/plain\n\nThanks, I will stop by tomorrow.\n")
+    assert events[0].kind == "reply"
+    assert events[0].stop_command is False
 
 
 def test_auto_reply_is_not_a_human_reply(campaign):

@@ -39,8 +39,10 @@ def test_footer_and_unsubscribe_headers(campaign):
     msg = compose.build_message(cfg, values, "<m@samlax.net>")
     html = msg.get_body(preferencelist=("html",)).get_content()
     text = msg.get_body(preferencelist=("plain",)).get_content()
-    assert "1 Test Street" in html and "Unsubscribe" in html
-    assert "1 Test Street" in text and "Unsubscribe:" in text
+    assert "1 Test Street" in html
+    assert "Reply STOP to unsubscribe." in html
+    assert "1 Test Street" in text
+    assert "Reply STOP to unsubscribe." in text
     assert "List-Unsubscribe" in msg
     assert msg["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert msg["Message-ID"] == "<m@samlax.net>"

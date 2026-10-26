@@ -26,6 +26,14 @@ OPT_OUT_RE = re.compile(
     r"do not (contact|email) me|delete my (details|data))\b",
     re.I,
 )
+# An exact "STOP" command (the footer asks for it). Matched against the whole line only,
+# so "I'll stop by tomorrow" is not an opt-out.
+STOP_RE = re.compile(
+    r"^(?:please\s+)?stop(?:\s+(?:emailing|mailing|contacting|sending)"
+    r"(?:\s+(?:me|us))?)?[\s.!]*$",
+    re.I,
+)
+_SIGNATURE_SPLIT = re.compile(r"\s+(?:--|—)\s*|^\s*(?:sent from my|get outlook)", re.I)
 NOREPLY_LOCAL = {
     "noreply", "no-reply", "donotreply", "do-not-reply", "mailer-daemon",
     "postmaster", "bounce", "bounces", "notifications", "automated",
@@ -49,6 +57,7 @@ class Inbound:
     dsn_original_id: str | None = None
     failed_recipients: list[str] = field(default_factory=list)
     is_auto: bool = False
+    stop_command: bool = False
 
     @property
     def is_hard_bounce(self) -> bool:
@@ -85,6 +94,13 @@ def _strip_quoted(text: str) -> str:
     """Drop the quoted original so our own unsubscribe footer cannot look like an opt-out."""
     match = _QUOTE_START.search(text)
     return text[:match.start()] if match else text
+
+
+def _looks_like_stop(snippet: str, subject: str) -> bool:
+    """True only for a reply that is essentially just STOP (not a sentence containing it)."""
+    head = _SIGNATURE_SPLIT.split(snippet or "", maxsplit=1)[0].strip()
+    return any(STOP_RE.match(candidate.strip())
+               for candidate in (subject or "", head, snippet or "") if candidate.strip())
 
 
 def _body_snippet(msg, limit: int = 200) -> str:
@@ -168,14 +184,17 @@ def parse_message(raw: bytes | str, uid: str | None = None) -> list[Inbound]:
                         message_id=message_id, snippet=snippet, uid=uid)]
 
     kind = "autoreply" if is_auto else "reply"
-    if not is_auto and OPT_OUT_RE.search(snippet or "") or (
-        not is_auto and OPT_OUT_RE.search(subject or "")
+    stop_command = not is_auto and _looks_like_stop(snippet, subject)
+    if not is_auto and (
+        stop_command
+        or OPT_OUT_RE.search(snippet or "")
+        or OPT_OUT_RE.search(subject or "")
     ):
         kind = "optout"
     return [Inbound(
         kind=kind, from_addr=from_addr, subject=subject, message_id=message_id,
         in_reply_to=in_reply_to, references=references, snippet=snippet, uid=uid,
-        is_auto=is_auto,
+        is_auto=is_auto, stop_command=stop_command,
     )]
 
 
@@ -254,12 +273,19 @@ def apply_message(conn: sqlite3.Connection, ev: Inbound, account_id: str) -> str
         return "autoreply"
 
     if ev.kind == "optout":
+        contact = db.contact_by_id(conn, contact_id) if contact_id else None
+        email_norm = contact["email_norm"] if contact else ev.from_addr
         if contact_id:
             db.mark_replied(conn, contact_id)
+        if ev.stop_command:
+            # An explicit STOP is unambiguous, so honour it immediately instead of
+            # waiting for approval; the footer tells recipients this is enough.
+            db.add_suppression(conn, email_norm, "replied STOP", source="imap")
+            db.add_inbound(conn, account_id, "optout", send["id"] if send else None,
+                           ev.from_addr, ev.subject, ev.snippet, ev.uid)
+            return "optout"
         db.add_needs_review(
-            conn, contact_id,
-            (db.contact_by_id(conn, contact_id)["email_norm"] if contact_id else ev.from_addr),
-            "opt_out",
+            conn, contact_id, email_norm, "opt_out",
             f"Asked to opt out: {ev.snippet[:160]}",
         )
         db.add_inbound(conn, account_id, "optout", send["id"] if send else None,
