@@ -191,6 +191,8 @@ class SafetyConfig(BaseModel):
     dry_run: bool = True
     require_typed_confirmation_over: int = 50
     stop_on_failure_rate: float = Field(default=0.10, ge=0.0, le=1.0)
+    # Keep an exact local copy of every real send under outbox/sent/<date>/.
+    archive_eml: bool = True
 
 
 class WarmupConfig(BaseModel):

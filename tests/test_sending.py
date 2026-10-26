@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from datetime import date
+from email import message_from_bytes, policy
 
 
 from dispatch import db
@@ -41,6 +42,40 @@ def test_quota_200_of_500_eligible(campaign, smtp_sink):
     assert len(smtp_sink.messages) == 200
     assert len(sent_recipients(smtp_sink)) == 200
     assert worker.stop_reason in ("quota_reached", "queue_empty")
+
+
+def test_live_send_archives_an_eml_copy(campaign, smtp_sink):
+    cfg = campaign([{"email": "archive@example.com"}], smtp_port=smtp_sink.port)
+    cfg.safety.archive_eml = True
+    prepare(cfg)
+
+    worker, _ = run_worker(cfg, quota=1, dry_run=False, prepared=True)
+    assert worker.stats.sent == 1
+
+    files = list((cfg.outbox_dir / "sent").rglob("*.eml"))
+    assert len(files) == 1
+    message = message_from_bytes(files[0].read_bytes(), policy=policy.default)
+    assert message["To"] == "archive@example.com"
+    assert message["Bcc"] is None
+    assert message.get_body(preferencelist=("html",)) is not None
+
+
+def test_archive_toggle_off_writes_nothing(campaign, smtp_sink):
+    cfg = campaign([{"email": "archive@example.com"}], smtp_port=smtp_sink.port)
+    cfg.safety.archive_eml = False
+    prepare(cfg)
+
+    run_worker(cfg, quota=1, dry_run=False, prepared=True)
+    assert not (cfg.outbox_dir / "sent").exists()
+
+
+def test_dry_run_does_not_use_the_sent_archive(campaign):
+    cfg = campaign([{"email": "dry@example.com"}], dry_run=True)
+    prepare(cfg)
+
+    run_worker(cfg, quota=1, dry_run=True, prepared=True)
+    assert list(cfg.outbox_dir.glob("*.eml"))       # the rehearsal copy exists
+    assert not (cfg.outbox_dir / "sent").exists()   # but nothing claims it was sent
 
 
 def test_shuffled_run_never_duplicates(campaign, smtp_sink):

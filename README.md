@@ -107,7 +107,10 @@ ls demo/outbox        # .eml files, nothing sent
    and `throttle.fixed_seconds: 0` (and disable the send window) in the config.
 8. **Go live** — set `safety.dry_run: false` (or untick dry run in Settings), review the
    pre-flight arithmetic, then start. Over 50 sends you must type `SEND <n>`.
-9. **After the run** — the post-run report shows totals and a per-hour breakdown. Use
+9. **Review a real send** — with `safety.archive_eml` on (default), every live message is
+   saved to `outbox/sent/<date>/`. Open one in Outlook, Apple Mail or Gmail to check
+   formatting; Bcc is removed from the copy.
+10. **After the run** — the post-run report shows totals and a per-hour breakdown. Use
    *Write results to sheet* to preview the diff and then write it. `LastAdvertised`,
    `Replied`, `Status`, `LastError` and `Attempts` are updated; replies detected by IMAP
    are written to the `Replied` column on the same flush.
@@ -154,6 +157,7 @@ Paths are resolved relative to the config file.
 | `safety.dry_run` | **Default true.** Must be false for real mail |
 | `safety.require_typed_confirmation_over` | Typed confirmation threshold |
 | `safety.stop_on_failure_rate` | Stop when the recent failure rate exceeds this |
+| `safety.archive_eml` | **Default true.** Write an exact `.eml` copy of every real send to `outbox/sent/<date>/` (Bcc removed). Dry-run copies stay in `outbox/` |
 | `warmup.enabled` / `ramp` | Weekly ceiling; effective cap = `min(daily_cap, ramp[week])`. Before the first send the clock is at week 0, so `ramp[0]` applies |
 | `sender.*` | From name/address, Reply-To, SMTP, IMAP, `secret_ref` |
 | `template.kind` | `blocks` or `raw` (inferred from the `.json` if absent) |
@@ -377,7 +381,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 166 tests, no network
+pytest                                   # 169 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -433,7 +437,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             166 tests, .eml fixtures, offscreen UI smoke tests
+tests/             169 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

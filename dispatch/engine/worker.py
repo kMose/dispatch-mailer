@@ -7,6 +7,7 @@ would only need a second run row.
 from __future__ import annotations
 
 import asyncio
+import copy
 import math
 import random
 import re
@@ -356,6 +357,14 @@ class Worker(threading.Thread):
             self.stats.attempts += 1
             failures_window.append(False)
             self._note_first_send(conn)
+            if self.cfg.safety.archive_eml:
+                try:
+                    archived = self._archive_sent(message, row)
+                    self._log("info", f"archived copy: {archived.name}")
+                except Exception as exc:
+                    # The message is already accepted; never fail or retry a send
+                    # because the local archive could not be written.
+                    self._log("warn", f"sent, but local .eml archive failed: {exc}")
             self._set_status("running")
             self._log("info", f"sent to {mask_email(row.email)} (row {row.sheet_row}) [{code}]")
             self._emit("sent", email=row.email, sheet_row=row.sheet_row, dry_run=False,
@@ -431,6 +440,24 @@ class Worker(threading.Thread):
             path = outbox / f"{stamp}-{_slug(email)}-{n}.eml"
             n += 1
         path.write_bytes(message.as_bytes(policy=message.policy.clone(linesep="\r\n")))
+        return path
+
+    def _archive_sent(self, message, row) -> Path:
+        """Write the exact bytes of a successful live send under outbox/sent/<date>/.
+
+        Bcc is removed from the copy so a test/archive recipient is not exposed if the
+        file is forwarded, while To/Cc and the full MIME body stay intact.
+        """
+        now = datetime.now()
+        folder = self.cfg.outbox_dir / "sent" / now.strftime("%Y-%m-%d")
+        folder.mkdir(parents=True, exist_ok=True)
+        slug = _slug(getattr(row, "email", ""))
+        sheet_row = getattr(row, "sheet_row", None) or 0
+        path = folder / f"{now:%H%M%S-%f}-row{sheet_row}-{slug}.eml"
+        archived = copy.deepcopy(message)
+        if "Bcc" in archived:
+            del archived["Bcc"]
+        path.write_bytes(archived.as_bytes(policy=archived.policy.clone(linesep="\r\n")))
         return path
 
     def _interval(self) -> float:

@@ -161,12 +161,16 @@ class SettingsDialog(QDialog):
         sform = QFormLayout(safety)
         self.dry_run = QCheckBox("Dry run — write .eml files to ./outbox, send nothing")
         self.dry_run.setChecked(cfg.safety.dry_run)
+        self.archive_eml = QCheckBox(
+            "Save a copy of every live email to ./outbox/sent (for review)")
+        self.archive_eml.setChecked(cfg.safety.archive_eml)
         self.typed_over = QSpinBox(); self.typed_over.setRange(0, 100000)
         self.typed_over.setValue(cfg.safety.require_typed_confirmation_over)
         self.stop_rate = QDoubleSpinBox(); self.stop_rate.setRange(0.0, 1.0)
         self.stop_rate.setSingleStep(0.01); self.stop_rate.setDecimals(2)
         self.stop_rate.setValue(cfg.safety.stop_on_failure_rate)
         sform.addRow("", self.dry_run)
+        sform.addRow("", self.archive_eml)
         sform.addRow("Typed confirmation over", self.typed_over)
         sform.addRow("Stop on failure rate", self.stop_rate)
 
@@ -275,6 +279,7 @@ class SettingsDialog(QDialog):
                 raise ValueError("pick at least one send day")
             cfg.campaign.send_window.days = days
 
+            cfg.safety.archive_eml = self.archive_eml.isChecked()
             cfg.safety.require_typed_confirmation_over = self.typed_over.value()
             cfg.safety.stop_on_failure_rate = self.stop_rate.value()
             if cfg.safety.dry_run and not self.dry_run.isChecked():

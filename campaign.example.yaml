@@ -29,6 +29,7 @@ safety:
   dry_run: true
   require_typed_confirmation_over: 50
   stop_on_failure_rate: 0.10
+  archive_eml: true          # keep a local .eml copy of every real send
 
 warmup:
   enabled: true
