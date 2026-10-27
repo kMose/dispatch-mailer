@@ -69,7 +69,9 @@ class SenderConfig(BaseModel):
     smtp: SMTPConfig = Field(default_factory=SMTPConfig)
     imap: IMAPConfig = Field(default_factory=IMAPConfig)
     secret_ref: str = "keyring:dispatch/sam"
-    max_per_connection: int = 50
+    # GoDaddy/Titan close a submission session after ~30 messages; reconnecting well
+    # before that avoids "too many messages sent in a single session" (452) rejections.
+    max_per_connection: int = 20
 
 
 class SendWindow(BaseModel):

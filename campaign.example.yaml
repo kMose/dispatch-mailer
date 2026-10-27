@@ -44,6 +44,7 @@ sender:
   smtp: { host: "smtp.PROVIDER", port: 587, starttls: true, timeout: 30 }
   imap: { host: "imap.PROVIDER", port: 993, ssl: true, mailbox: "INBOX" }
   secret_ref: "keyring:dispatch/sam"
+  max_per_connection: 20     # reconnect after this many messages (GoDaddy/Titan session cap)
 
 template:
   kind: "blocks"

@@ -160,6 +160,7 @@ Paths are resolved relative to the config file.
 | `safety.archive_eml` | **Default true.** Write an exact `.eml` copy of every real send to `outbox/sent/<date>/` (Bcc removed). Dry-run copies stay in `outbox/` |
 | `warmup.enabled` / `ramp` | Weekly ceiling; effective cap = `min(daily_cap, ramp[week])`. Before the first send the clock is at week 0, so `ramp[0]` applies |
 | `sender.*` | From name/address, Reply-To, SMTP, IMAP, `secret_ref` |
+| `sender.max_per_connection` | Reconnect after this many messages (default **20**). GoDaddy/Titan cap messages per SMTP session (~30) and reject the next with `452 too many messages sent in a single session` |
 | `template.kind` | `blocks` or `raw` (inferred from the `.json` if absent) |
 | `template.subject` | Subject template with placeholders |
 | `template.html_path` / `text_path` / `blocks_path` | Rendered artifacts + block source |
