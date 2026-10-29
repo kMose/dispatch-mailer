@@ -220,8 +220,21 @@ def _match_send(conn: sqlite3.Connection, ev: Inbound):
     return None
 
 
-def apply_message(conn: sqlite3.Connection, ev: Inbound, account_id: str) -> str:
+def uids_after(uids: list[str], last_uid: int) -> list[str]:
+    """Drop the boundary UID that `UID n:*` returns when n is above the mailbox high-water mark.
+
+    IMAP treats `*` as the highest existing UID, so `UID 5:*` on a mailbox whose last UID is
+    4 can return UID 4 again. Without this filter every poll reprocesses the newest message
+    and counts the same bounce or auto-reply again.
+    """
+    return [u for u in uids if u.isdigit() and int(u) > last_uid]
+
+
+def apply_message(conn: sqlite3.Connection, ev: Inbound, account_id: str,
+                  *, dedupe: bool = True) -> str:
     """Persist one parsed message. Returns the action taken (for logs/tests)."""
+    if dedupe and ev.uid and db.inbound_uid_exists(conn, account_id, ev.uid):
+        return "duplicate"
     send = _match_send(conn, ev)
     contact_id = send["contact_id"] if send else None
 
@@ -344,6 +357,8 @@ class IMAPMonitor:
             except Exception:
                 current_validity = None
             stored_validity = db.get_meta(conn, f"imap_uidvalidity:{account}")
+            validity_changed = bool(stored_validity and current_validity
+                                    and stored_validity != current_validity)
             last_uid = uid_start(last_uid, stored_validity, current_validity)
             if current_validity:
                 db.set_meta(conn, f"imap_uidvalidity:{account}", current_validity)
@@ -353,15 +368,14 @@ class IMAPMonitor:
             if typ != "OK":
                 return counts
             uids = [u.decode() if isinstance(u, bytes) else str(u) for u in (data[0] or b"").split()]
-            uids = [u for u in uids if u.isdigit()]
-            uids = uids[-self.max_fetch:]
+            uids = uids_after(uids, last_uid)[-self.max_fetch:]
             highest = last_uid
             for uid in uids:
                 raw = self._fetch(client, uid)
                 if raw is None:
                     continue
                 for ev in parse_message(raw, uid=uid):
-                    action = apply_message(conn, ev, account)
+                    action = apply_message(conn, ev, account, dedupe=not validity_changed)
                     counts[action] = counts.get(action, 0) + 1
                 highest = max(highest, int(uid))
             db.set_meta(conn, key, str(highest))

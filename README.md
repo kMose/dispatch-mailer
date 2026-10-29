@@ -399,7 +399,7 @@ which rows are ambiguous; it does not silently guess in `ISO` mode.
 ## Tests
 
 ```bash
-pytest                                   # 173 tests, no network
+pytest                                   # 175 tests, no network
 pytest --cov=dispatch.engine --cov=dispatch.sheet --cov-report=term
 ```
 
@@ -455,7 +455,7 @@ dispatch/
   ui/              main_window, models, preflight, template_builder, settings, onboarding,
                    report, inbox, theme, app
   templates/starters/  personal_note, promo_card, announcement
-tests/             173 tests, .eml fixtures, offscreen UI smoke tests
+tests/             175 tests, .eml fixtures, offscreen UI smoke tests
 tools/             make_fixtures.py, frozen_entry.py
 ```
 

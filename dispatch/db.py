@@ -516,6 +516,16 @@ def add_inbound(conn: sqlite3.Connection, account_id: str, kind: str,
     return int(cur.lastrowid)
 
 
+def inbound_uid_exists(conn: sqlite3.Connection, account_id: str, uid: str) -> bool:
+    if not uid:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM inbound_events WHERE account_id=? AND uid=? LIMIT 1",
+        (account_id, str(uid)),
+    ).fetchone()
+    return row is not None
+
+
 def inbound_counts(conn: sqlite3.Connection, account_id: str) -> dict[str, int]:
     rows = conn.execute(
         "SELECT kind, COUNT(*) AS n FROM inbound_events WHERE account_id=? GROUP BY kind",

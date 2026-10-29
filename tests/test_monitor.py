@@ -48,6 +48,27 @@ def test_gmail_550_dsn_suppresses_and_fails_hard(campaign):
     conn.close()
 
 
+def test_repeated_poll_of_the_same_bounce_counts_once(campaign):
+    cfg = campaign([{"email": "bob@example.com"}])
+    conn, _ = sent_contact(cfg, "bob@example.com", "<send-bob-001@samlax.net>")
+    events = monitor.parse_message((FIXTURES / "gmail_550.eml").read_bytes(), uid="42")
+
+    assert monitor.apply_message(conn, events[0], "sam") == "bounce_hard"
+    assert monitor.apply_message(conn, events[0], "sam") == "duplicate"
+    assert db.inbound_counts(conn, "sam")["bounce_hard"] == 1
+    reviews = conn.execute(
+        "SELECT COUNT(*) FROM needs_review WHERE reason='hard_bounce'").fetchone()[0]
+    assert reviews == 1
+    conn.close()
+
+
+def test_uids_after_drops_the_uid_at_the_watermark():
+    # `UID 5:*` on a mailbox whose highest UID is 4 returns UID 4 again.
+    assert monitor.uids_after(["4"], 4) == []
+    assert monitor.uids_after(["4", "5", "6"], 4) == ["5", "6"]
+    assert monitor.uids_after(["1", "2"], 0) == ["1", "2"]
+
+
 def test_reply_with_in_reply_to_marks_replied_and_excludes_next_run(campaign):
     cfg = campaign([{"email": "alice@example.com", "first_name": "Alice"}])
     conn, contact_id = sent_contact(cfg, "alice@example.com", "<send-alice-001@samlax.net>")
